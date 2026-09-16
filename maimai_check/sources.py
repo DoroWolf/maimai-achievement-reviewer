@@ -368,7 +368,7 @@ class DivingFishClient:
             interval = 5
         verify_url = resp.get("verification_uri_complete") or resp.get("verification_uri") or DEVICE_VERIFY_URL
         self.log(
-            f"请在 {max(1, expires_in // 60)} 分钟内打开下面的链接完成授权（用户码 {user_code}）：\n{verify_url}"
+            f"请在 {max(1, expires_in // 60)} 分钟内打开下面的链接完成授权：\n{verify_url}"
         )
 
         deadline = time.monotonic() + expires_in
