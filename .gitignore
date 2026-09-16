@@ -5,5 +5,5 @@ __pycache__/
 cache/
 out/
 report*.json
-config.local.json
+config.json
 *.log

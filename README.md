@@ -39,35 +39,42 @@ BREAK 池  = 10000 × (Σ该 BREAK 的池份额) / (20 × brk)      T1 表：CP 
 uv sync
 
 # 1) 本地成绩文件（无需任何凭据，也可用于离线回归）
-uv run python achievement_reviewer.py --source local --records-file records.json
+uv run python main.py --source local --records-file records.json
 
 # 2) 公开 B50 查询（需要水鱼用户名或 QQ）
-uv run python achievement_reviewer.py --source b50 --username <水鱼用户名>
+uv run python main.py --source b50 --username <水鱼用户名>
 
 # 3) 自己的全量成绩（OAuth）
-uv run python achievement_reviewer.py --source oauth
+uv run python main.py --source oauth
 
-# 3a) 首次授权：设备码流程（打开打印出的链接点「授权」，凭据写入 config.local.json）
-uv run python achievement_reviewer.py --login-only
+# 3a) 首次授权：设备码流程（打开打印出的链接点「授权」，凭据写入 config.json）
+uv run python main.py --login-only
 
 # 3b) 出报告：JSON + 可疑/边缘文本清单 + CSV 表格（可直接用 Excel 打开）
-uv run python achievement_reviewer.py --source oauth --out --csv --list-file
-#    等价于 --out out/report.json --csv out/report.csv --list-file out/suspicious.txt
+uv run python main.py --source oauth --raw --csv --output
+#    等价于 --raw out/report.json --csv out/report.csv --output out/suspicious.txt
 #    只写文件名（如 --csv report.csv）时统一落在 out/，带目录的路径原样使用
 ```
 
-OAuth 的 `client_id` **写死在** `maimai_check/sources.py` 的 `OFFICIAL_CLIENT_ID`，
-命令行不接受 `client_id` / `client_secret`，也不读任何环境变量。
-只有按「机密客户端」注册时才需要把 `client_secret` 放进项目根目录的 `config.local.json`
-（已 gitignore，可用 `--config` 指向别的文件）：
+OAuth 凭据只从项目根目录的 `config.json` 里读（已 gitignore，可用 `--config` 指向别的文件），
+里面的键**都是可选的**，给哪个用哪个：
 
 ```json
-{ "client_secret": "your-client-secret" }
+{
+  "client_id": "your-client-id",
+  "client_secret": "your-client-secret"
+}
 ```
 
-配置文件里若写了 `client_id` 会覆盖写死的默认值；`refresh_token` / `subject` 由登录流程自动写入。
-机密客户端续期用 `on-behalf-of` 换票，否则用 `refresh_token`
-（刷新会轮换令牌，工具会把新令牌立刻落盘到缓存目录）。
+| 键 | 谁写 | 说明 |
+| --- | --- | --- |
+| `client_id` | 手写可选 | 覆盖 `maimai_check/sources.py` 里写死的 `OFFICIAL_CLIENT_ID`——**公开客户端也可以用自己的**，不必非得用写死的官方值；换票请求会带上它，所以要与注册的应用一致 |
+| `client_secret` | 手写可选 | 只有「机密客户端」才需要；有它时续期走 `on-behalf-of` 换票，否则走 `refresh_token` |
+| `refresh_token` / `subject` | 登录后自动写入 | `--login-only` 完成设备码授权后由工具落盘；刷新会轮换令牌，新令牌会被立刻写回配置文件 |
+
+命令行不接受 `client_id` / `client_secret`（避免泄漏到进程列表与 shell 历史），也不读任何环境变量。
+登录流程是「保留已有键、同名键用新值覆盖」，所以手写的 `client_id` / `client_secret` 不会被清掉；
+反过来，换了 `client_id` 就等于换了应用，旧的 `refresh_token` 会失效，需要重新 `--login-only`。
 
 ## 常用参数
 
@@ -82,12 +89,12 @@ OAuth 的 `client_id` **写死在** `maimai_check/sources.py` 的 `OFFICIAL_CLIE
 | `--strict` | 等价于 `--tolerance 0 --score-tolerance 0`（只认原地可解） |
 | `--include-utage` | 同时校验宴谱 |
 | `--limit N` / `--quiet` / `--refresh` | 只校验前 N 条 / 只输出汇总 / 忽略缓存 |
-| `--cache-dir DIR`（默认 `cache`）、`--config FILE`（默认 `config.local.json`） | 缓存与凭据位置 |
-| `--out-dir DIR`（默认 `out`） | 输出目录：`--out` / `--csv` / `--list-file` 只写文件名时落在这里，带目录的路径原样使用 |
-| `--out [report.json]` | 写出完整 JSON 报告（`meta` / `summary` / `results`）；只给 `--out` 即 `out/report.json` |
+| `--cache-dir DIR`（默认 `cache`）、`--config FILE`（默认 `config.json`） | 缓存与凭据位置 |
+| `--raw-dir DIR`（默认 `out`） | 输出目录：`--raw` / `--csv` / `--output` 只写文件名时落在这里，带目录的路径原样使用 |
+| `--raw [report.json]` | 写出完整 JSON 报告（`meta` / `summary` / `results`）；只给 `--raw` 即 `out/report.json` |
 | `--csv [report.csv]` | 写出 CSV 表格（UTF-8 BOM + CRLF，Excel 双击即开）；只给 `--csv` 即 `out/report.csv` |
-| `--list-file [suspicious.txt]` | 把「可疑 + 边缘」清单写成文本档案（曲名 / ID / 类型 / 难度 / 等级 / 定数 / 成绩 / 全连 / 连锁 / 物量 / 说明）；只给 `--list-file` 即 `out/suspicious.txt` |
-| `--login-only` | 只完成 OAuth 设备码授权并把凭据写入 `config.local.json`，不拉取成绩 |
+| `--output [suspicious.txt]` | 把「可疑 + 边缘」清单写成文本档案（曲名 / ID / 类型 / 难度 / 等级 / 定数 / 成绩 / 全连 / 连锁 / 物量 / 说明）；只给 `--output` 即 `out/suspicious.txt` |
+| `--login-only` | 只完成 OAuth 设备码授权并把凭据写入 `config.json`，不拉取成绩 |
 
 取整窗口的含义（`R` 为真实成绩、`S` 为显示值，单位都是 0.0001%）：
 
@@ -100,8 +107,8 @@ union：两者取并（最宽松）
 ## 输出
 
 1. **终端汇总**：一行统计 + 判定配置，`--quiet` 只保留汇总。
-2. **JSON 报告**（`--out`）：`meta`（来源、判定表、窗口、容差、生成时间）/ `summary`（键为中文状态名）/ `results`（每条含 `status`（中文）/ `notes` / `ra` / `rate` / `fc` / `fs` / `nearest_delta` 等；`成绩(%)` 已能唯一确定分数，故不再重复输出「分数(S)」）。
-3. **文本清单**（`--list-file`）：把所有非「通过」的成绩（可疑 → 边缘）写成 UTF-8 等宽文本档案，
+2. **JSON 报告**（`--raw`）：`meta`（来源、判定表、窗口、容差、生成时间）/ `summary`（键为中文状态名）/ `results`（每条含 `status`（中文）/ `notes` / `ra` / `rate` / `fc` / `fs` / `nearest_delta` 等；`成绩(%)` 已能唯一确定分数，故不再重复输出「分数(S)」）。
+3. **文本清单**（`--output`）：把所有非「通过」的成绩（可疑 → 边缘）写成 UTF-8 等宽文本档案，
    便于存档、对比与人工复查。文件结构：
 
    ```
@@ -130,8 +137,8 @@ union：两者取并（最宽松）
    * `成绩(%)`、`总物量`、`最近可行差值(%)` 都是裸数字（如 `98.4464` / `+0.0058`），可直接排序与透视；
      与 `成绩(%)` 重复的「分数(S)」列已去掉（`成绩(%) × 10000` 才是它）。
 
-   所有输出路径都会在终端打印**绝对路径**；`--out` / `--csv` / `--list-file` 只写文件名时统一落在
-   `--out-dir`（默认 `out/`），带目录的写法（`out/x.csv`、`D:\tmp\x.csv`）原样使用。
+   所有输出路径都会在终端打印**绝对路径**；`--raw` / `--csv` / `--output` 只写文件名时统一落在
+   `--raw-dir`（默认 `out/`），带目录的写法（`out/x.csv`、`D:\tmp\x.csv`）原样使用。
 
 ## 算法与性能
 
@@ -168,7 +175,7 @@ union：两者取并（最宽松）
 * 默认容差很紧（物量 ±1 / 分数 ±0.0001%）：真实数据里约 8%（326/3906）的记录会落进「边缘」，属于实机取整的正常范围；
   差值越小越可能是数据舍入，差值越大越可能是伪造。需要「一位小数都不许差」时用 `--strict`。
 * Windows 控制台默认 GBK，曲名里的半角片假名（如 `ﾟ`）无法编码，输出时会以 `?` 代替而不是中断报告
-  （`--list-file` / `--out` 落盘的文件始终是完整 UTF-8）。
+  （`--output` / `--raw` 落盘的文件始终是完整 UTF-8）。
 * 水鱼 `player/test_data` 是被随机化过的公开测试数据（`dx` / `fc` 等字段不可信）；
   本程序不再提供该在线来源，需要离线回归时把数据存成本地 JSON 再用 `--source local` 读取。
 * 宴谱（`id ≥ 100000`）物量口径与通常谱面不同，默认跳过。
@@ -176,10 +183,10 @@ union：两者取并（最宽松）
 ## 目录结构
 
 ```
-achievement_reviewer.py          CLI 入口（取数 → 逐条校验 → 汇总 / JSON）
+main.py          CLI 入口（取数 → 逐条校验 → 汇总 / JSON）
 maimai_check/
   scoreline.py           分数可行域模型（纯逻辑，无网络）
   checks.py              单条成绩校验：可解性判定与状态定义（内部英文标识 + 中文输出标签）
-  sources.py             水鱼 API 客户端：OAuth（client_id 写死）、缓存、music_data / records / b50
+  sources.py             水鱼 API 客户端：OAuth（client_id 可配、缺省用写死的官方值）、缓存、music_data / records / b50
   report.py              终端表格（CJK 宽度对齐）与 JSON 报告
 ```

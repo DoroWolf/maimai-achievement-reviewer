@@ -1,20 +1,4 @@
 #!/usr/bin/env python
-"""命令行入口：拉取谱面与成绩，逐条校验并输出报告。
-
-用法示例::
-
-    uv run python achievement_reviewer.py --source oauth
-    uv run python achievement_reviewer.py --source b50 --username <水鱼用户名>
-    uv run python achievement_reviewer.py --source local --records-file records.json
-
-    # 出报告：JSON / CSV / 可疑清单（只写文件名时统一落在 --out-dir，默认 out/）
-    uv run python achievement_reviewer.py --out --csv --list-file
-
-判定说明见 ``maimai_check/scoreline.py`` 的模块文档；可疑条目退出码为 2。
-OAuth 的 ``client_id`` 写死在 ``maimai_check/sources.py``（可用 ``--config`` 覆盖），
-命令行不接受 client_id / client_secret，也不读环境变量。
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -36,9 +20,9 @@ from maimai_check.checks import (
 from maimai_check.report import render_results, render_summary, write_csv, write_json, write_problem_list
 from maimai_check.scoreline import BREAK_TABLES, WINDOWS, Notes
 
-DEFAULT_CONFIG = "config.local.json"
+DEFAULT_CONFIG = df.DEFAULT_CONFIG_PATH
 
-#: 输出文件的默认落点：只给文件名时写在 ``--out-dir``（默认 ``out``）里。
+#: 输出文件的默认落点：只给文件名时写在 ``--raw-dir``（默认 ``out``）里。
 DEFAULT_OUT_DIR = "out"
 DEFAULT_OUT_NAME = "report.json"
 DEFAULT_CSV_NAME = "report.csv"
@@ -63,7 +47,7 @@ def use_robust_std_streams() -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="achievement_reviewer.py",
+        prog="main.py",
         description="基于水鱼 API 的 maimai 成绩合法性校验器（判定成绩是否「打得出来」）",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -108,12 +92,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--limit", type=int, default=0, help="只校验前 N 条（调试用）")
     parser.add_argument("--refresh", action="store_true", help="忽略本地缓存，重新请求")
     parser.add_argument(
-        "--out-dir",
+        "--raw-dir",
         default=DEFAULT_OUT_DIR,
-        help=f"输出目录（默认 {DEFAULT_OUT_DIR}）：--out/--csv/--list-file 只写文件名时落在这里",
+        help=f"输出目录（默认 {DEFAULT_OUT_DIR}）：--raw/--csv/--output 只写文件名时落在这里",
     )
     parser.add_argument(
-        "--out",
+        "--raw",
         nargs="?",
         const=DEFAULT_OUT_NAME,
         help=f"把完整结果写入 JSON 文件（缺省文件名 {DEFAULT_OUT_NAME}）",
@@ -125,7 +109,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"把全部结果写入 CSV 表格（缺省文件名 {DEFAULT_CSV_NAME}，UTF-8 BOM + CRLF，可直接用 Excel 打开）",
     )
     parser.add_argument(
-        "--list-file",
+        "--output",
         nargs="?",
         const=DEFAULT_LIST_NAME,
         help=(
@@ -140,7 +124,7 @@ def build_parser() -> argparse.ArgumentParser:
 def resolve_output(path: str, out_dir: str) -> Path:
     """解析输出路径。
 
-    只给文件名（如 ``suspicous.txt``）时放进 ``--out-dir``（默认 ``out``），
+    只给文件名（如 ``suspicous.txt``）时放进 ``--raw-dir``（默认 ``out``），
     带目录的写法（``out/report.csv``、``D:\\tmp\\x.csv``）与绝对路径原样使用，
     这样「只写文件名」的结果不会再散落到项目根目录。
     """
@@ -293,19 +277,19 @@ def main(argv: list[str] | None = None) -> int:
         "score_tolerance": args.score_tolerance,
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
-    if args.out:
-        path = write_json(resolve_output(args.out, args.out_dir), results, meta)
-        print(f"\n完整结果已写入 {describe_output(path)}")
-    if args.csv:
-        path = write_csv(resolve_output(args.csv, args.out_dir), results)
-        print(f"CSV 表格（{len(results)} 行，可直接用 Excel 打开）已写入 {describe_output(path)}")
-    if args.list_file:
-        path = write_problem_list(resolve_output(args.list_file, args.out_dir), results, meta=meta)
-        problems = counts[Status.IMPOSSIBLE] + counts[Status.MARGINAL]
-        print(f"可疑/边缘清单（{problems} 条）已写入 {describe_output(path)}")
+    if args.raw or args.csv or args.output:
+        print("\n")
+        if args.raw:
+            path = write_json(resolve_output(args.raw, args.raw_dir), results, meta)
+            print(f"原始 JSON 已写入 {describe_output(path)}")
+        if args.csv:
+            path = write_csv(resolve_output(args.csv, args.raw_dir), results)
+            print(f"CSV 表格（{len(results)} 行，可直接用 Excel 打开）已写入 {describe_output(path)}")
+        if args.output:
+            path = write_problem_list(resolve_output(args.output, args.raw_dir), results, meta=meta)
+            problems = counts[Status.IMPOSSIBLE] + counts[Status.MARGINAL]
+            print(f"异常清单（{problems} 条）已写入 {describe_output(path)}")
 
-    if counts[Status.IMPOSSIBLE]:
-        return 2
     return 0
 
 

@@ -53,8 +53,8 @@ CHAIN_LABELS: dict[str, str] = {
 }
 
 #: 文本清单的标题与表头。
-PROBLEM_LIST_TITLE = "maimai 成绩合法性校验 —— 可疑/边缘成绩清单"
-_PROBLEM_HEADERS = ("曲名", "ID", "类型", "难度", "等级", "定数", "成绩", "全连", "连锁", "物量", "说明")
+PROBLEM_LIST_TITLE = "maimai DX 成绩合法性校验 —— 异常成绩清单"
+_PROBLEM_HEADERS = ("曲名", "ID", "类型", "难度", "等级", "定数", "分数", "全连", "同步", "物量", "说明")
 _PROBLEM_ALIGNS = ("left", "left", "left", "left", "left", "right", "right", "left", "left", "left", "left")
 
 #: 清单中出现的状态分组（按此顺序输出）。
@@ -69,11 +69,11 @@ CSV_HEADERS = (
     "难度",
     "等级",
     "定数",
-    "成绩(%)",
-    "RA",
+    "分数(%)",
+    "单曲 Rating",
     "评级",
     "全连",
-    "连锁",
+    "同步",
     "物量",
     "总物量",
     "最近可行差值(%)",
@@ -147,9 +147,6 @@ def _detail(result: CheckResult) -> str:
 
 def as_dict(result: CheckResult) -> dict:
     """把校验结果转成可序列化的字典。
-
-    状态字段输出中文标签（内部标识仍用 :class:`Status` 的英文成员值）；
-    ``成绩(%)`` 已经能唯一确定分数，故不再重复输出「分数(S)」。
     """
     notes = result.notes
     return {
@@ -175,7 +172,7 @@ def as_dict(result: CheckResult) -> dict:
 
 
 def render_results(results: Sequence[CheckResult]) -> str:
-    """渲染明细表（跳过状态为「通过」的条目，只看问题与边缘）。"""
+    """渲染明细表（跳过状态为“通过”的条目，只看问题与边缘）。"""
     rows = []
     for result in results:
         if result.status is Status.OK:
@@ -194,7 +191,7 @@ def render_results(results: Sequence[CheckResult]) -> str:
         )
     if not rows:
         return "未发现可疑成绩。"
-    headers = ["状态", "曲名", "类型", "难度", "物量(t+h+s+to+b)", "成绩", "定数", "说明"]
+    headers = ["状态", "曲名", "类型", "难度", "物量", "成绩", "定数", "说明"]
     return render_table(headers, rows, ["left", "left", "left", "left", "left", "right", "right", "left"])
 
 
@@ -212,7 +209,7 @@ def render_summary(results: Sequence[CheckResult], *, elapsed: float | None = No
 
 
 def write_json(path: str | Path, results: Iterable[CheckResult], meta: dict | None = None) -> Path:
-    """写出 JSON 报告（``summary`` 的键与 ``results`` 的 ``status`` 都是中文标签）。"""
+    """写出 JSON 报告。"""
     results = list(results)
     payload = {
         "meta": meta or {},
@@ -371,16 +368,12 @@ def _csv_row(result: CheckResult) -> list[str]:
 
 def csv_rows(results: Iterable[CheckResult]) -> list[list[str]]:
     """把全部结果整理成 CSV 数据行。
-
-    含「通过」「跳过」在内的每一条成绩，**不按状态分组**（可疑与边缘一视同仁），
-    统一按 ``(曲目 ID, 类型, 难度)`` 升序排列，保证输出稳定可 diff；状态仍保留在
-    ``状态`` 列里，方便在 Excel 中自行筛选。
     """
     return [_csv_row(result) for result in sorted(results, key=_sort_key)]
 
 
 def render_csv(results: Iterable[CheckResult]) -> str:
-    """渲染 CSV 文本（含表头；行分隔符为 CRLF，字段按 RFC 4180 加引号）。"""
+    """渲染 CSV 文本。"""
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator=_CSV_LINETERMINATOR)
     writer.writerow(CSV_HEADERS)
@@ -389,12 +382,7 @@ def render_csv(results: Iterable[CheckResult]) -> str:
 
 
 def write_csv(path: str | Path, results: Iterable[CheckResult]) -> Path:
-    """把全部校验结果写成 CSV，返回实际写入的路径。
-
-    编码为 ``utf-8-sig``（带 BOM），Excel 双击打开即可正确显示中文；列顺序见 ``CSV_HEADERS``，
-    其中数值列（``成绩(%)`` / ``总物量`` 等）都是裸数字，便于直接排序透视；
-    行顺序按 ``(曲目 ID, 类型, 难度)`` 升序，不按状态分组。
-    """
+    """把全部校验结果写成 CSV，返回实际写入的路径。 """
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(render_csv(results), encoding="utf-8-sig", newline="")

@@ -1,29 +1,3 @@
-"""分数可行域模型：判断某条成绩在给定物量下是否「真的打得出来」（纯逻辑，无网络依赖）。
-
-模型（与 akari-bot `modules/maimai/libraries/maimaidx_scoreline.py` 的分数表同源）：
-
-    总权重 T = tap + 2*hold + 3*slide + touch + 5*brk     （touch 仅 DX 谱面存在）
-    令 u = 1000000/T 为「一个基础单位」的分数（单位：0.0001%，即本模块的 S 单位）
-    基础分 = Σ note 权重 × u × 判定系数     判定系数：PERFECT 1.0 / GREAT 0.8 / GOOD 0.5 / MISS 0
-    BREAK 奖励 = 10000 * (Σ该 BREAK份额) / (20 * brk)     份额：CP 20、PERFECT 15、GREAT 8、GOOD 6、MISS 0
-    理论最高分 = 100% 基础分 + 100% BREAK 池 = 101.0000%
-
-已用 `player/test_data` 的 492 条真实成绩（brk<=16，排除宴谱）回归：
-**floor 判定窗口 + T1 表** 只有 3 条无解，且这 3 条在物量 ±1 内即可解（属物量数据/模型舍入的边缘）。
-
-判定窗口以「半单位」表示 `2R ∈ [2S+a, 2S+b)`：
-
-    floor：显示值 S = floor(R)      -> (0, 2)
-    round：显示值 S = round(R)      -> (-1, 1)
-    union：两者取并（最宽松）        -> (-1, 2)
-
-当 ``brk`` 较大时（超过 :data:`EXACT_BRK_LIMIT`），BREAK 的 (基础分合计, 池份额合计)
-可达组合数会爆炸（`brk=64` 已约 8 万组，而水鱼数据中最大 `brk` 可达 491），此时退化为
-「保守判定」：只使用两个宽松条件——「每 1 点池份额最多对应 5 点、至少对应 2.5 点基础分」
-以及「非 BREAK 部分的贡献落在其可达区间内」。保守判定结果是真可达集合的**超集**，
-因此只会漏报可疑成绩，绝不会把正常成绩误判为可疑。
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -75,7 +49,7 @@ _SLIDE_OPTIONS = (15, 24, 30)  # SLIDE：1.5u / 2.4u / 3.0u
 #: 分数上限（101.0000%），超过即为不可能成绩
 MAX_SCORE = 1_010_000
 
-#: 精确判定的 BREAK 数上限；超过则改用保守判定（见模块文档）。
+#: 精确判定的 BREAK 数上限；超过则改用保守判定。
 EXACT_BRK_LIMIT = 64
 
 

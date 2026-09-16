@@ -1,19 +1,3 @@
-"""数据源：谱面数据与玩家成绩（水鱼 / diving-fish API + 本地缓存）。
-
-取数口径与 akari-bot `maimaidx_apidata.get_total_record` 一致：
-
-* 谱面物量：``GET /music_data``
-* 全量成绩：``GET /player/records``（需 OAuth，``Authorization: Bearer <token>``）
-* B50：``POST /query/player``（公开，无需授权）
-
-OAuth 的 ``client_id`` 默认用写死的 :data:`OFFICIAL_CLIENT_ID`，也可以在配置文件里覆盖；
-命令行不接受 ``client_id`` / ``client_secret``，也不读环境变量。
-
-OAuth 参数（``grant_type`` / 端点 / 字段名）与 akari-bot `divingfish_oauth.py` 完全一致：
-登记为「机密客户端」（配置文件里有 ``client_secret``）时用 ``on-behalf-of`` 换票续期，
-否则用 ``refresh_token`` 续期（刷新会轮换令牌，必须先落盘）。
-"""
-
 from __future__ import annotations
 
 import json
@@ -37,16 +21,18 @@ DEVICE_VERIFY_URL = f"{AUTH_BASE}/device"
 MUSIC_DATA_URL = f"{PROBER_BASE}/music_data"
 RECORDS_URL = f"{PROBER_BASE}/player/records"
 QUERY_PLAYER_URL = f"{PROBER_BASE}/query/player"
-OFFICIAL_CLIENT_ID = "c1fa481837042b12e2e5161979b71315"  # 官方的，故意写死不要改
+
+OFFICIAL_CLIENT_ID = "c1fa481837042b12e2e5161979b71315"
+
+DEFAULT_CONFIG_PATH = "config.json"
 
 RECORDS_SCOPE = "prober.records.read"
 DEVICE_CODE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
 ON_BEHALF_OF_GRANT = "urn:diving-fish:params:oauth:grant-type:on-behalf-of"
 
-#: 宴谱 ID 下界：与水鱼 / 机器人一致，直接跳过
 UTAGE_MIN_ID = 100000
 DEFAULT_TIMEOUT = 30.0
-#: access token 提前过期余量、以及换票令牌的保守有效期
+
 TOKEN_MARGIN = 30.0
 ON_BEHALF_OF_TTL = 300.0
 SLOW_DOWN_STEP = 5
@@ -113,12 +99,7 @@ class Credentials:
         return data
 
 
-def load_credentials(path: str | Path = "config.local.json") -> Credentials:
-    """读取凭据：配置文件里的值优先，``client_id`` 缺省用写死的官方值。
-
-    命令行不再接受 ``client_id`` / ``client_secret``，环境变量也不再读取；
-    「机密客户端」的 ``client_secret`` 只从配置文件里取。
-    """
+def load_credentials(path: str | Path = DEFAULT_CONFIG_PATH) -> Credentials:
     config_path = Path(path)
     stored: dict[str, Any] = {}
     if config_path.exists():
@@ -137,8 +118,11 @@ def load_credentials(path: str | Path = "config.local.json") -> Credentials:
     )
 
 
-def save_credentials(credentials: Credentials, path: str | Path = "config.local.json") -> None:
-    """把客户端凭据与令牌落盘（公开客户端的 refresh token 必须先落盘再使用）。"""
+def save_credentials(credentials: Credentials, path: str | Path = DEFAULT_CONFIG_PATH) -> None:
+    """把客户端凭据与令牌落盘（公开客户端的 refresh token 必须先落盘再使用）。
+
+    已存在的键会被保留、同名键被覆盖，所以手写的 ``client_id`` 不会因为一次登录就丢失。
+    """
     config_path = Path(path)
     current: dict[str, Any] = {}
     if config_path.exists():
@@ -192,7 +176,7 @@ class DivingFishClient:
         credentials: Credentials,
         *,
         cache_dir: str | Path = "cache",
-        config_path: str | Path = "config.local.json",
+        config_path: str | Path = DEFAULT_CONFIG_PATH,
         timeout: float = DEFAULT_TIMEOUT,
         session: requests.Session | None = None,
         log=print,
@@ -358,7 +342,7 @@ class DivingFishClient:
 
     def login(self) -> str:
         """设备码流程：打印用户码与授权链接，轮询到令牌后落盘凭据。"""
-        label = f"maimai-score-check {socket.gethostname() or 'local'}"
+        label = socket.gethostname() or "local"
         resp = self._post_form(
             DEVICE_AUTHORIZATION_URL,
             {

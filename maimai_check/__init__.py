@@ -1,5 +1,3 @@
-"""maimai 成绩合法性校验器（水鱼 / diving-fish API）。"""
-
 from .checks import ChartInfo, CheckResult, Record, Status, check_record, summarize
 from .scoreline import (
     EXACT_BRK_LIMIT,
