@@ -96,7 +96,7 @@ class Notes:
     def __str__(self) -> str:  # pragma: no cover - 仅用于日志
         return (
             f"tap={self.tap} hold={self.hold} slide={self.slide} "
-            f"touch={self.touch} brk={self.brk} (T={self.total})"
+            f"touch={self.touch} break={self.brk} (T={self.total})"
         )
 
 

@@ -178,12 +178,12 @@ def load_chart_index(args: argparse.Namespace, log=print) -> dict[tuple[str, str
                     notes=notes,
                 )
                 index[info.key] = info
-        log(f"已从 {args.music_data_file} 读取 {len(index)} 个谱面")
+        log(f"已从 {args.music_data_file} 读取 {len(index)} 张谱面")
         return index
 
     client = make_client(args, log)
     index = client.chart_index(refresh=args.refresh)
-    log(f"已取得 {len(index)} 个谱面的物量数据")
+    log(f"已取得 {len(index)} 张谱面的物量数据")
     return index
 
 

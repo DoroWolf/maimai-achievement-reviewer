@@ -2,7 +2,7 @@
 
 （所有内容皆为AI生成，仅供参考）
 
-基于[水鱼（diving-fish）API](https://www.diving-fish.com/) 的 maimai 成绩合法性校验器：
+基于[水鱼（diving-fish）API](https://www.diving-fish.com/) 的 maimai DX 成绩合法性校验器：
 逐条判断成绩「是否真的打得出来」，并给出「还差多少就能解」的诊断。
 
 ## 它做什么

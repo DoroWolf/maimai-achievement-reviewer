@@ -1,18 +1,3 @@
-"""记录级校验：判断一条成绩在该物量下「解得出来吗」。
-
-判定分级（``Status``）：内部标识一律用英文（``ok`` / ``marginal`` / ``impossible`` /
-``skipped``），只有最终输出（终端 / JSON / CSV / 文本清单）才用中文标签（``Status.label``）。
-
-* ``IMPOSSIBLE`` 可疑：分数在物量 ±tolerance、分数 ±score_tolerance 内都解不出来
-* ``MARGINAL`` 边缘：原地无解，但物量 ±tolerance 或分数 ±score_tolerance 内可解
-  （水鱼物量数据/模型舍入的边缘）
-* ``SKIPPED`` 跳过：宴谱（id >= 100000）或物量数据缺失
-* ``OK`` 通过
-
-本模块只判「可解性」，不校验成绩自带的 ``ra`` / ``rate`` / ``ds`` / ``dxScore`` / ``fc``
-字段（这些字段原样引用水鱼返回的数据，本程序不做一致性检查）。
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -38,7 +23,6 @@ __all__ = [
     "summarize",
 ]
 
-#: 机器人 ``maimaidx_mapping.rate_mapping``：短码 -> 展示名（只用于展示水鱼返回的 ``rate``）
 RATE_MAPPING: dict[str, str] = {
     "d": "D",
     "c": "C",
