@@ -284,7 +284,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"原始 JSON 已写入 {describe_output(path)}")
         if args.csv:
             path = write_csv(resolve_output(args.csv, args.raw_dir), results)
-            print(f"CSV 表格（{len(results)} 行，可直接用 Excel 打开）已写入 {describe_output(path)}")
+            print(f"CSV 表格（{len(results)} 行）已写入 {describe_output(path)}")
         if args.output:
             path = write_problem_list(resolve_output(args.output, args.raw_dir), results, meta=meta)
             problems = counts[Status.IMPOSSIBLE] + counts[Status.MARGINAL]
