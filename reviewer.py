@@ -7,8 +7,8 @@ import sys
 import time
 from pathlib import Path
 
-from maimai_check import sources as df
-from maimai_check.checks import (
+from maimaidx_achievement_reviewer import sources as df
+from maimaidx_achievement_reviewer.checks import (
     DEFAULT_SCORE_TOLERANCE,
     ChartInfo,
     CheckResult,
@@ -17,8 +17,8 @@ from maimai_check.checks import (
     check_record,
     summarize,
 )
-from maimai_check.report import render_results, render_summary, write_csv, write_json, write_problem_list
-from maimai_check.scoreline import BREAK_TABLES, WINDOWS, Notes
+from maimaidx_achievement_reviewer.report import render_results, render_summary, write_csv, write_json, write_problem_list
+from maimaidx_achievement_reviewer.scoreline import BREAK_TABLES, WINDOWS, Notes
 
 DEFAULT_CONFIG = df.DEFAULT_CONFIG_PATH
 
