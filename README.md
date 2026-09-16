@@ -33,31 +33,31 @@ uv sync
 检查本地成绩文件：
 
 ```bash
-uv run python main.py --source local --records-file records.json
+uv run python reviewer.py --source local --records-file records.json
 ```
 
 检查公开 B50：
 
 ```bash
-uv run python main.py --source b50 --username <用户名>
+uv run python reviewer.py --source b50 --username <用户名>
 ```
 
 检查自己的完整成绩：
 
 ```bash
-uv run python main.py --source oauth
+uv run python reviewer.py --source oauth
 ```
 
 首次使用 OAuth：
 
 ```bash
-uv run python main.py --login-only
+uv run python reviewer.py --login-only
 ```
 
 生成完整报告：
 
 ```bash
-uv run python main.py --source oauth --raw --csv --output
+uv run python reviewer.py --source oauth --raw --csv --output
 ```
 
 ## 常用参数

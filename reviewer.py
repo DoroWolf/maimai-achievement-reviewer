@@ -46,7 +46,7 @@ def use_robust_std_streams() -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="main.py",
+        prog="reviewer.py",
         description="基于水鱼 API 的 maimai DX 成绩合法性校验器",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
