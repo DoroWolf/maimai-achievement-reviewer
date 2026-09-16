@@ -22,11 +22,10 @@ from maimai_check.scoreline import BREAK_TABLES, WINDOWS, Notes
 
 DEFAULT_CONFIG = df.DEFAULT_CONFIG_PATH
 
-#: 输出文件的默认落点：只给文件名时写在 ``--raw-dir``（默认 ``out``）里。
 DEFAULT_OUT_DIR = "out"
-DEFAULT_OUT_NAME = "report.json"
+DEFAULT_RAW_NAME = "report.json"
 DEFAULT_CSV_NAME = "report.csv"
-DEFAULT_LIST_NAME = "suspicious.txt"
+DEFAULT_OUTPUT_NAME = "report.txt"
 
 
 def use_robust_std_streams() -> None:
@@ -99,8 +98,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--raw",
         nargs="?",
-        const=DEFAULT_OUT_NAME,
-        help=f"把完整结果写入 JSON 文件（缺省文件名 {DEFAULT_OUT_NAME}）",
+        const=DEFAULT_RAW_NAME,
+        help=f"把完整结果写入 JSON 文件（缺省文件名 {DEFAULT_RAW_NAME}）",
     )
     parser.add_argument(
         "--csv",
@@ -111,10 +110,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output",
         nargs="?",
-        const=DEFAULT_LIST_NAME,
+        const=DEFAULT_OUTPUT_NAME,
         help=(
             "把「可疑 + 边缘」成绩清单写入文本文件"
-            f"（缺省文件名 {DEFAULT_LIST_NAME}，含曲名/ID/类型/难度/等级/定数/成绩/全连/连锁/物量/说明）"
+            f"（缺省文件名 {DEFAULT_OUTPUT_NAME}，含曲名/ID/类型/难度/等级/定数/成绩/全连/连锁/物量/说明）"
         ),
     )
     parser.add_argument("--quiet", action="store_true", help="只输出汇总，不打印明细表")
