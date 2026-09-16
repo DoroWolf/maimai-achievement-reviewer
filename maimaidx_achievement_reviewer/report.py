@@ -1,4 +1,4 @@
-﻿"""结果输出：终端表格（按中日韩字符宽度对齐）、JSON 报告、可疑成绩文本清单与 CSV 表格。"""
+﻿"""结果输出：终端表格（按中日韩字符宽度对齐）、JSON 报告、异常成绩文本清单与 CSV 表格。"""
 
 from __future__ import annotations
 
@@ -190,7 +190,7 @@ def render_results(results: Sequence[CheckResult]) -> str:
             ]
         )
     if not rows:
-        return "未发现可疑成绩。"
+        return "未发现异常成绩。"
     headers = ["状态", "曲名", "类型", "难度", "物量", "成绩", "定数", "备注"]
     return render_table(headers, rows, ["left", "left", "left", "left", "left", "right", "right", "left"])
 
