@@ -47,7 +47,7 @@ def use_robust_std_streams() -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="main.py",
-        description="基于水鱼 API 的 maimai DX 成绩合法性校验器。",
+        description="基于水鱼 API 的 maimai DX 成绩合法性校验器",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
@@ -86,7 +86,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_SCORE_TOLERANCE,
         help=f"分数容差（S 单位，默认 {DEFAULT_SCORE_TOLERANCE} = 0.0001%%，差值更大即记为“可疑”）",
     )
-    parser.add_argument("--strict", action="store_true", help="严格模式，等价于 `--tolerance 0 --score-tolerance 0`")
+    parser.add_argument("--strict", action="store_true", help="严格模式，等价于`--tolerance 0 --score-tolerance 0")
     parser.add_argument("--include-utage", action="store_true", help="同时校验宴谱（默认跳过）")
     parser.add_argument("--limit", type=int, default=0, help="只校验前 N 条")
     parser.add_argument("--refresh", action="store_true", help="忽略本地缓存，重新请求")
