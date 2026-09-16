@@ -47,25 +47,25 @@ def use_robust_std_streams() -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="main.py",
-        description="基于水鱼 API 的 maimai 成绩合法性校验器（判定成绩是否「打得出来」）",
+        description="基于水鱼 API 的 maimai DX 成绩合法性校验器。",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "--source",
         choices=("oauth", "b50", "local"),
         default="oauth",
-        help="成绩来源：oauth=全量(需授权) / b50=公开 B50 / local=本地成绩文件",
+        help="成绩来源：oauth=全量（需授权） / b50=公开 B50 / local=本地成绩文件",
     )
     parser.add_argument("--username", help="B50 查询用的水鱼用户名")
     parser.add_argument("--qq", help="B50 查询用的 QQ 号")
     parser.add_argument("--records-file", help="本地成绩 JSON（--source local）")
     parser.add_argument("--music-data-file", help="本地谱面 JSON（离线时使用）")
     parser.add_argument("--cache-dir", default="cache", help="缓存目录（默认 cache）")
-    parser.add_argument("--config", default=DEFAULT_CONFIG, help=f"凭据文件（默认 {DEFAULT_CONFIG}）")
+    parser.add_argument("--config", default=DEFAULT_CONFIG, help=f"配置文件（默认 {DEFAULT_CONFIG}）")
     parser.add_argument(
         "--login-only",
         action="store_true",
-        help="只走水鱼 OAuth 授权（设备码），把凭据写入配置文件后退出，不拉取成绩",
+        help="水鱼 OAuth 授权，把凭据写入配置文件后退出，不会拉取成绩",
     )
     parser.add_argument(
         "--break-table",
@@ -79,16 +79,16 @@ def build_parser() -> argparse.ArgumentParser:
         default="floor",
         help="取整判定窗口（默认 floor=显示值等于向下取整，回归最佳）",
     )
-    parser.add_argument("--tolerance", type=int, default=1, help="物量容差（默认 1，超出的记为「边缘」）")
+    parser.add_argument("--tolerance", type=int, default=1, help="物量容差（默认 1，超出的记为“边缘”）")
     parser.add_argument(
         "--score-tolerance",
         type=int,
         default=DEFAULT_SCORE_TOLERANCE,
-        help=f"分数容差（S 单位，默认 {DEFAULT_SCORE_TOLERANCE} = 0.0001%%，差值更大即记为「可疑」）",
+        help=f"分数容差（S 单位，默认 {DEFAULT_SCORE_TOLERANCE} = 0.0001%%，差值更大即记为“可疑”）",
     )
-    parser.add_argument("--strict", action="store_true", help="等价于 --tolerance 0 --score-tolerance 0")
+    parser.add_argument("--strict", action="store_true", help="严格模式，等价于 `--tolerance 0 --score-tolerance 0`")
     parser.add_argument("--include-utage", action="store_true", help="同时校验宴谱（默认跳过）")
-    parser.add_argument("--limit", type=int, default=0, help="只校验前 N 条（调试用）")
+    parser.add_argument("--limit", type=int, default=0, help="只校验前 N 条")
     parser.add_argument("--refresh", action="store_true", help="忽略本地缓存，重新请求")
     parser.add_argument(
         "--raw-dir",
@@ -112,11 +112,11 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="?",
         const=DEFAULT_OUTPUT_NAME,
         help=(
-            "把「可疑 + 边缘」成绩清单写入文本文件"
-            f"（缺省文件名 {DEFAULT_OUTPUT_NAME}，含曲名/ID/类型/难度/等级/定数/成绩/全连/连锁/物量/说明）"
+            "将异常成绩清单写入文本文件"
+            f"（缺省文件名 {DEFAULT_OUTPUT_NAME}，含曲名/ID/类型/难度/等级/定数/成绩/全连/同步/物量/说明）"
         ),
     )
-    parser.add_argument("--quiet", action="store_true", help="只输出汇总，不打印明细表")
+    parser.add_argument("--quiet", action="store_true", help="只输出汇总，不打印详细内容")
     return parser
 
 
