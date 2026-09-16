@@ -99,4 +99,4 @@ uv run python reviewer.py --source oauth --raw --csv --output
 * 缺少谱面数据时，对应成绩会被直接跳过。
 
 ## 数据来源
-成绩与谱面数据来自 [diving-fish](www.diving-fish.com/maimaidx/prober/)。
+成绩与谱面数据来自 [diving-fish](https://www.diving-fish.com/maimaidx/prober/)。
