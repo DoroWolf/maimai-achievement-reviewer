@@ -54,7 +54,7 @@ CHAIN_LABELS: dict[str, str] = {
 
 #: 文本清单的标题与表头。
 PROBLEM_LIST_TITLE = "maimai DX 成绩合法性校验 —— 异常成绩清单"
-_PROBLEM_HEADERS = ("曲名", "ID", "类型", "难度", "等级", "定数", "分数", "全连", "同步", "物量", "说明")
+_PROBLEM_HEADERS = ("曲名", "ID", "类型", "难度", "等级", "定数", "分数", "全连", "同步", "物量", "备注")
 _PROBLEM_ALIGNS = ("left", "left", "left", "left", "left", "right", "right", "left", "left", "left", "left")
 
 #: 清单中出现的状态分组（按此顺序输出）。
@@ -77,7 +77,7 @@ CSV_HEADERS = (
     "物量",
     "总物量",
     "最近可行差值(%)",
-    "说明",
+    "备注",
 )
 
 #: CSV 行分隔符：Windows / Excel 习惯的 CRLF。
@@ -191,7 +191,7 @@ def render_results(results: Sequence[CheckResult]) -> str:
         )
     if not rows:
         return "未发现可疑成绩。"
-    headers = ["状态", "曲名", "类型", "难度", "物量", "成绩", "定数", "说明"]
+    headers = ["状态", "曲名", "类型", "难度", "物量", "成绩", "定数", "备注"]
     return render_table(headers, rows, ["left", "left", "left", "left", "left", "right", "right", "left"])
 
 
@@ -309,7 +309,7 @@ def render_problem_list(
         parts.append(f"{status.label} {counts[status]}")
     lines.append("统计：" + " | ".join(parts))
     lines.append(
-        "说明：可疑 = 该物量下无法达成；边缘 = 与最近可行成绩的差距落在容差内"
+        "备注：可疑 = 该物量下无法达成；边缘 = 与最近可行成绩的差距落在容差内"
         "（可能是数据/模型舍入）；跳过 = 宴谱或缺谱面数据。"
     )
 

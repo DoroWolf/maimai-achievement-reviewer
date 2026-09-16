@@ -66,7 +66,7 @@ OAuth 凭据只从项目根目录的 `config.json` 里读（已 gitignore，可�
 }
 ```
 
-| 键 | 谁写 | 说明 |
+| 键 | 谁写 | 备注 |
 | --- | --- | --- |
 | `client_id` | 手写可选 | 覆盖 `maimai_check/sources.py` 里写死的 `OFFICIAL_CLIENT_ID`——**公开客户端也可以用自己的**，不必非得用写死的官方值；换票请求会带上它，所以要与注册的应用一致 |
 | `client_secret` | 手写可选 | 只有「机密客户端」才需要；有它时续期走 `on-behalf-of` 换票，否则走 `refresh_token` |
@@ -78,7 +78,7 @@ OAuth 凭据只从项目根目录的 `config.json` 里读（已 gitignore，可�
 
 ## 常用参数
 
-| 参数 | 说明 |
+| 参数 | 备注 |
 | --- | --- |
 | `--source {oauth,b50,local}` | 成绩来源，默认 `oauth`（`local` 读 `--records-file`） |
 | `--records-file` / `--music-data-file` | 离线校验：本地成绩 / 谱面 JSON（`--source local` / 完全离线时使用） |
@@ -93,7 +93,7 @@ OAuth 凭据只从项目根目录的 `config.json` 里读（已 gitignore，可�
 | `--raw-dir DIR`（默认 `out`） | 输出目录：`--raw` / `--csv` / `--output` 只写文件名时落在这里，带目录的路径原样使用 |
 | `--raw [report.json]` | 写出完整 JSON 报告（`meta` / `summary` / `results`）；只给 `--raw` 即 `out/report.json` |
 | `--csv [report.csv]` | 写出 CSV 表格（UTF-8 BOM + CRLF，Excel 双击即开）；只给 `--csv` 即 `out/report.csv` |
-| `--output [suspicious.txt]` | 把「可疑 + 边缘」清单写成文本档案（曲名 / ID / 类型 / 难度 / 等级 / 定数 / 成绩 / 全连 / 连锁 / 物量 / 说明）；只给 `--output` 即 `out/suspicious.txt` |
+| `--output [suspicious.txt]` | 把「可疑 + 边缘」清单写成文本档案（曲名 / ID / 类型 / 难度 / 等级 / 定数 / 成绩 / 全连 / 连锁 / 物量 / 备注）；只给 `--output` 即 `out/suspicious.txt` |
 | `--login-only` | 只完成 OAuth 设备码授权并把凭据写入 `config.json`，不拉取成绩 |
 
 取整窗口的含义（`R` 为真实成绩、`S` 为显示值，单位都是 0.0001%）：
@@ -118,22 +118,22 @@ union：两者取并（最宽松）
    数据来源：本地文件 cache\records.json（来源 local）
    判定配置：T1 表 / floor 窗口 / 物量容差 1 / 分数容差 0.0001%
    统计：共校验 3906 条成绩 | 可疑 851 | 边缘 326 | 跳过 0 | 通过 2729
-   说明：可疑 = 该物量下无法达成；边缘 = ...；跳过 = ...
+   备注：可疑 = 该物量下无法达成；边缘 = ...；跳过 = ...
 
    【可疑】851 条
-   曲名  ID  类型  难度  等级  定数  成绩  全连  连锁  物量  说明
+   曲名  ID  类型  难度  等级  定数  成绩  全连  连锁  物量  备注
    ...
    ```
 
    列含义：`曲名` / `ID`（水鱼 `song_id`）/ `类型`（`SD` / `DX`）/ `难度`（`BSC`…`ReM`）/ `等级`（如 `13+`）/
    `定数` / `成绩`（4 位小数百分数）/ `全连`（`fc` 字段：`FC` `FC+` `AP` `AP+`，缺失记 `-`）/
-   `连锁`（`fs` 字段：`FS` `FS+` `FSD` `FSD+` `SYNC`）/ `物量`（`tap+hold+slide+touch+brk`）/ `说明`（判定原因）。
+   `连锁`（`fs` 字段：`FS` `FS+` `FSD` `FSD+` `SYNC`）/ `物量`（`tap+hold+slide+touch+brk`）/ `备注`（判定原因）。
    排序：可疑组按「与最近可行成绩的差值」降序（越离谱越靠前），其余组按 `(ID, 类型, 难度)` 升序，便于 `diff`。
 4. **CSV 表格**（`--csv`）：每条成绩一行（含「通过」「跳过」），可直接用 Excel / WPS 打开或另存为 xlsx。
    * 编码 `UTF-8 with BOM` + `CRLF` 换行：双击即开，中文不乱码；
    * **不按状态分组**（可疑与边缘一视同仁），统一按 `(ID, 类型, 难度)` 升序，便于 `diff`；状态仍保留在 `状态` 列；
    * 列：`状态` / `曲名` / `ID` / `类型` / `难度` / `等级` / `定数` / `成绩(%)` / `RA` / `评级` /
-     `全连` / `连锁` / `物量`（`tap+hold+slide+touch+brk`）/ `总物量` / `最近可行差值(%)` / `说明`；
+     `全连` / `连锁` / `物量`（`tap+hold+slide+touch+brk`）/ `总物量` / `最近可行差值(%)` / `备注`；
    * `成绩(%)`、`总物量`、`最近可行差值(%)` 都是裸数字（如 `98.4464` / `+0.0058`），可直接排序与透视；
      与 `成绩(%)` 重复的「分数(S)」列已去掉（`成绩(%) × 10000` 才是它）。
 
