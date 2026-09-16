@@ -33,7 +33,7 @@ __all__ = [
     "write_problem_list",
 ]
 
-DIFFICULTY_NAMES = ("basic", "advanced", "expert", "master", "Re:MASTER")
+DIFFICULTY_NAMES = ("Basic", "Advanced", "Expert", "Master", "Re:MASTER")
 
 #: 全连标记（水鱼 ``fc`` 字段）的可读名。
 COMBO_LABELS: dict[str, str] = {

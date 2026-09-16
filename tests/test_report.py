@@ -76,7 +76,7 @@ def test_render_table_pads_to_equal_display_width():
 def test_format_notes_and_difficulty_name():
     assert format_notes(None) == "-"
     assert format_notes(Notes(1, 2, 3, 4, 5)) == "1+2+3+4+5"
-    assert [difficulty_name(index) for index in (0, 3, 4)] == ["basic", "master", "Re:MASTER"]
+    assert [difficulty_name(index) for index in (0, 3, 4)] == ["basic", "Master", "Re:MASTER"]
     assert difficulty_name(9) == "L9"
 
 
@@ -109,7 +109,7 @@ def test_as_dict_is_serializable():
     assert payload["status"] == "ok" and payload["status_label"] == "通过"
     assert payload["notes"] == [10, 0, 0, 0, 0]
     assert payload["note_count"] == 10
-    assert payload["difficulty"] == "master"
+    assert payload["difficulty"] == "Master"
     assert json.loads(json.dumps(payload, ensure_ascii=False)) == payload
 
 
