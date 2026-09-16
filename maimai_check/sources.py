@@ -37,6 +37,7 @@ MUSIC_DATA_URL = f"{PROBER_BASE}/music_data"
 RECORDS_URL = f"{PROBER_BASE}/player/records"
 TEST_DATA_URL = f"{PROBER_BASE}/player/test_data"
 QUERY_PLAYER_URL = f"{PROBER_BASE}/query/player"
+OFFICIAL_CLIENT_ID = "c1fa481837042b12e2e5161979b71315" # 官方的，故意写死不要改
 
 RECORDS_SCOPE = "prober.records.read"
 DEVICE_CODE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
@@ -113,7 +114,7 @@ class Credentials:
 
 
 def load_credentials(
-    client_id: str | None = None,
+    client_id: str = OFFICIAL_CLIENT_ID,
     client_secret: str | None = None,
     path: str | Path = "config.local.json",
 ) -> Credentials:
@@ -126,11 +127,6 @@ def load_credentials(
         except (OSError, ValueError) as exc:
             raise DataSourceError(f"读取 {config_path} 失败：{exc}") from exc
     resolved_id = client_id or os.environ.get("DF_CLIENT_ID") or stored.get("client_id")
-    if not resolved_id:
-        raise DataSourceError(
-            "缺少水鱼 OAuth client_id：请用 --client-id 指定，或设置环境变量 DF_CLIENT_ID，"
-            f"或写入 {config_path}"
-        )
     return Credentials(
         client_id=str(resolved_id),
         client_secret=client_secret or os.environ.get("DF_CLIENT_SECRET") or stored.get("client_secret"),

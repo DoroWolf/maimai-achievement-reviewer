@@ -76,7 +76,7 @@ def test_render_table_pads_to_equal_display_width():
 def test_format_notes_and_difficulty_name():
     assert format_notes(None) == "-"
     assert format_notes(Notes(1, 2, 3, 4, 5)) == "1+2+3+4+5"
-    assert [difficulty_name(index) for index in (0, 3, 4)] == ["basic", "Master", "Re:MASTER"]
+    assert [difficulty_name(index) for index in (0, 3, 4)] == ["Basic", "Master", "Re:MASTER"]
     assert difficulty_name(9) == "L9"
 
 
