@@ -3,15 +3,16 @@
 
 用法示例::
 
-    uv run python check_scores.py --source oauth --client-id <ID> --client-secret <SECRET>
-    uv run python check_scores.py --source test                 # 水鱼公开测试数据（离线回归）
-    uv run python check_scores.py --source b50 --username <水鱼用户名>
-    uv run python check_scores.py --source file --records-file records.json
+    uv run python achievement_reviewer.py --source oauth
+    uv run python achievement_reviewer.py --source b50 --username <水鱼用户名>
+    uv run python achievement_reviewer.py --source local --records-file records.json
 
     # 出报告：JSON / CSV / 可疑清单（只写文件名时统一落在 --out-dir，默认 out/）
-    uv run python check_scores.py --out --csv --list-file
+    uv run python achievement_reviewer.py --out --csv --list-file
 
 判定说明见 ``maimai_check/scoreline.py`` 的模块文档；可疑条目退出码为 2。
+OAuth 的 ``client_id`` 写死在 ``maimai_check/sources.py``（可用 ``--config`` 覆盖），
+命令行不接受 client_id / client_secret，也不读环境变量。
 """
 
 from __future__ import annotations
@@ -62,21 +63,19 @@ def use_robust_std_streams() -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="check_scores.py",
+        prog="achievement_reviewer.py",
         description="基于水鱼 API 的 maimai 成绩合法性校验器（判定成绩是否「打得出来」）",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "--source",
-        choices=("oauth", "b50", "test", "file"),
+        choices=("oauth", "b50", "local"),
         default="oauth",
-        help="成绩来源：oauth=全量(需授权) / b50=公开 B50 / test=水鱼测试数据 / file=本地文件",
+        help="成绩来源：oauth=全量(需授权) / b50=公开 B50 / local=本地成绩文件",
     )
-    parser.add_argument("--client-id", help="水鱼 OAuth client_id（或用 DF_CLIENT_ID 环境变量）")
-    parser.add_argument("--client-secret", help="水鱼 OAuth client_secret（机密客户端才需要）")
     parser.add_argument("--username", help="B50 查询用的水鱼用户名")
     parser.add_argument("--qq", help="B50 查询用的 QQ 号")
-    parser.add_argument("--records-file", help="本地成绩 JSON（--source file）")
+    parser.add_argument("--records-file", help="本地成绩 JSON（--source local）")
     parser.add_argument("--music-data-file", help="本地谱面 JSON（离线时使用）")
     parser.add_argument("--cache-dir", default="cache", help="缓存目录（默认 cache）")
     parser.add_argument("--config", default=DEFAULT_CONFIG, help=f"凭据文件（默认 {DEFAULT_CONFIG}）")
@@ -105,9 +104,6 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"分数容差（S 单位，默认 {DEFAULT_SCORE_TOLERANCE} = 0.0001%%，差值更大即记为「可疑」）",
     )
     parser.add_argument("--strict", action="store_true", help="等价于 --tolerance 0 --score-tolerance 0")
-    parser.add_argument("--no-field-check", action="store_true", help="关闭 ra/rate/ds 字段自洽校验")
-    parser.add_argument("--check-dx", action="store_true", help="额外校验 dxScore 上限（水鱼数据可能不可靠）")
-    parser.add_argument("--check-combo", action="store_true", help="额外校验 100.5%% 以上必须 AP")
     parser.add_argument("--include-utage", action="store_true", help="同时校验宴谱（默认跳过）")
     parser.add_argument("--limit", type=int, default=0, help="只校验前 N 条（调试用）")
     parser.add_argument("--refresh", action="store_true", help="忽略本地缓存，重新请求")
@@ -163,15 +159,12 @@ def describe_output(path: Path) -> str:
 
 
 def make_client(args: argparse.Namespace, log=print) -> df.DivingFishClient:
-    """构造数据客户端；不需要授权的来源允许缺少 client_id。"""
-    try:
-        credentials = df.load_credentials(args.client_id, args.client_secret, args.config)
-    except df.DataSourceError as exc:
-        if args.source in ("test", "b50", "file"):
-            log(f"[warn] {exc}；当前来源无需授权，继续执行")
-            credentials = df.Credentials(client_id="")
-        else:
-            raise
+    """构造数据客户端。
+
+    凭据只来自 ``--config`` 指向的配置文件：``client_id`` 缺省用 ``sources.OFFICIAL_CLIENT_ID``
+    （源码里写死的官方值），机密客户端的 ``client_secret`` 也只能写在配置文件里。
+    """
+    credentials = df.load_credentials(args.config)
     return df.DivingFishClient(credentials, cache_dir=args.cache_dir, config_path=args.config, log=log)
 
 
@@ -212,14 +205,10 @@ def load_chart_index(args: argparse.Namespace, log=print) -> dict[tuple[str, str
 
 def load_records(args: argparse.Namespace, log=print) -> tuple[list[dict], str]:
     """按来源取得原始成绩列表，返回 ``(records, 描述)``。"""
-    if args.source == "file":
+    if args.source == "local":
         if not args.records_file:
-            raise SystemExit("--source file 需要 --records-file")
+            raise SystemExit("--source local 需要 --records-file")
         return df.records_from_file(args.records_file), f"本地文件 {args.records_file}"
-    if args.source == "test":
-        return df.DivingFishClient(df.Credentials(client_id=""), cache_dir=args.cache_dir, log=log).test_data(
-            refresh=args.refresh, include_utage=args.include_utage
-        ), "水鱼 /player/test_data"
     if args.source == "b50":
         if not (args.username or args.qq):
             raise SystemExit("--source b50 需要 --username 或 --qq")
@@ -279,9 +268,6 @@ def main(argv: list[str] | None = None) -> int:
                 window=args.window,
                 tolerance=max(0, args.tolerance),
                 score_tolerance=max(0, args.score_tolerance),
-                check_fields=not args.no_field_check,
-                check_dx=args.check_dx,
-                check_combo=args.check_combo,
             )
         )
 
@@ -315,10 +301,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"CSV 表格（{len(results)} 行，可直接用 Excel 打开）已写入 {describe_output(path)}")
     if args.list_file:
         path = write_problem_list(resolve_output(args.list_file, args.out_dir), results, meta=meta)
-        problems = counts[Status.IMPOSSIBLE] + counts[Status.MARGINAL] + counts[Status.FIELD_ERROR]
+        problems = counts[Status.IMPOSSIBLE] + counts[Status.MARGINAL]
         print(f"可疑/边缘清单（{problems} 条）已写入 {describe_output(path)}")
 
-    if counts[Status.IMPOSSIBLE] or counts[Status.FIELD_ERROR]:
+    if counts[Status.IMPOSSIBLE]:
         return 2
     return 0
 

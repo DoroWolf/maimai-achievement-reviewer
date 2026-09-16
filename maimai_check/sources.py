@@ -4,27 +4,28 @@
 
 * 谱面物量：``GET /music_data``
 * 全量成绩：``GET /player/records``（需 OAuth，``Authorization: Bearer <token>``）
-* 离线回归：``GET /player/test_data``（水鱼公开测试数据，含成绩但 dx/fc 等字段不可信）
 * B50：``POST /query/player``（公开，无需授权）
 
+OAuth 的 ``client_id`` 默认用写死的 :data:`OFFICIAL_CLIENT_ID`，也可以在配置文件里覆盖；
+命令行不接受 ``client_id`` / ``client_secret``，也不读环境变量。
+
 OAuth 参数（``grant_type`` / 端点 / 字段名）与 akari-bot `divingfish_oauth.py` 完全一致：
-登记为「机密客户端」（有 ``client_secret``）时用 ``on-behalf-of`` 换票续期，
+登记为「机密客户端」（配置文件里有 ``client_secret``）时用 ``on-behalf-of`` 换票续期，
 否则用 ``refresh_token`` 续期（刷新会轮换令牌，必须先落盘）。
 """
 
 from __future__ import annotations
 
 import json
-import os
 import socket
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Iterator
+from typing import Any, Iterable
 
 import requests
 
-from .checks import ChartInfo, Record
+from .checks import ChartInfo
 from .scoreline import Notes
 
 PROBER_BASE = "https://www.diving-fish.com/api/maimaidxprober"
@@ -35,9 +36,8 @@ REVOKE_URL = f"{AUTH_BASE}/oauth/revoke"
 DEVICE_VERIFY_URL = f"{AUTH_BASE}/device"
 MUSIC_DATA_URL = f"{PROBER_BASE}/music_data"
 RECORDS_URL = f"{PROBER_BASE}/player/records"
-TEST_DATA_URL = f"{PROBER_BASE}/player/test_data"
 QUERY_PLAYER_URL = f"{PROBER_BASE}/query/player"
-OFFICIAL_CLIENT_ID = "c1fa481837042b12e2e5161979b71315" # 官方的，故意写死不要改
+OFFICIAL_CLIENT_ID = "c1fa481837042b12e2e5161979b71315"  # 官方的，故意写死不要改
 
 RECORDS_SCOPE = "prober.records.read"
 DEVICE_CODE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
@@ -113,23 +113,25 @@ class Credentials:
         return data
 
 
-def load_credentials(
-    client_id: str = OFFICIAL_CLIENT_ID,
-    client_secret: str | None = None,
-    path: str | Path = "config.local.json",
-) -> Credentials:
-    """按命令行 > 环境变量 > 本地配置文件的优先级读取凭据。"""
+def load_credentials(path: str | Path = "config.local.json") -> Credentials:
+    """读取凭据：配置文件里的值优先，``client_id`` 缺省用写死的官方值。
+
+    命令行不再接受 ``client_id`` / ``client_secret``，环境变量也不再读取；
+    「机密客户端」的 ``client_secret`` 只从配置文件里取。
+    """
     config_path = Path(path)
     stored: dict[str, Any] = {}
     if config_path.exists():
         try:
-            stored = json.loads(config_path.read_text(encoding="utf-8"))
+            loaded = json.loads(config_path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
             raise DataSourceError(f"读取 {config_path} 失败：{exc}") from exc
-    resolved_id = client_id or os.environ.get("DF_CLIENT_ID") or stored.get("client_id")
+        if not isinstance(loaded, dict):
+            raise DataSourceError(f"{config_path} 应为 JSON 对象")
+        stored = loaded
     return Credentials(
-        client_id=str(resolved_id),
-        client_secret=client_secret or os.environ.get("DF_CLIENT_SECRET") or stored.get("client_secret"),
+        client_id=str(stored.get("client_id") or OFFICIAL_CLIENT_ID),
+        client_secret=stored.get("client_secret"),
         refresh_token=stored.get("refresh_token"),
         subject=stored.get("subject"),
     )
@@ -311,17 +313,6 @@ class DivingFishClient:
         if cached is None:
             cached = self._request_player_data(RECORDS_URL)
             self._save_cache("records.json", cached)
-        records = cached.get("records", []) if isinstance(cached, dict) else cached
-        return self._filter_utage(records, include_utage)
-
-    def test_data(self, *, refresh: bool = False, include_utage: bool = False) -> list[dict]:
-        """水鱼公开测试成绩（``/player/test_data``，无需授权，用于离线回归）。"""
-        cached = None if refresh else self._load_cache("test_data.json")
-        if cached is None:
-            resp = self._request("GET", TEST_DATA_URL, headers={"accept": "application/json"})
-            resp.raise_for_status()
-            cached = resp.json()
-            self._save_cache("test_data.json", cached)
         records = cached.get("records", []) if isinstance(cached, dict) else cached
         return self._filter_utage(records, include_utage)
 

@@ -58,9 +58,9 @@ _PROBLEM_HEADERS = ("曲名", "ID", "类型", "难度", "等级", "定数", "成
 _PROBLEM_ALIGNS = ("left", "left", "left", "left", "left", "right", "right", "left", "left", "left", "left")
 
 #: 清单中出现的状态分组（按此顺序输出）。
-_PROBLEM_GROUPS = (Status.IMPOSSIBLE, Status.MARGINAL, Status.FIELD_ERROR)
+_PROBLEM_GROUPS = (Status.IMPOSSIBLE, Status.MARGINAL)
 
-#: CSV 表头（在文本清单的列之后补上机器可读的 ``分数`` / ``RA`` / ``评级`` 等信息）。
+#: CSV 表头（在文本清单的列之后补上 ``RA`` / ``评级`` 等信息）。
 CSV_HEADERS = (
     "状态",
     "曲名",
@@ -70,7 +70,6 @@ CSV_HEADERS = (
     "等级",
     "定数",
     "成绩(%)",
-    "分数(S)",
     "RA",
     "评级",
     "全连",
@@ -147,7 +146,11 @@ def _detail(result: CheckResult) -> str:
 
 
 def as_dict(result: CheckResult) -> dict:
-    """把校验结果转成可序列化的字典。"""
+    """把校验结果转成可序列化的字典。
+
+    状态字段输出中文标签（内部标识仍用 :class:`Status` 的英文成员值）；
+    ``成绩(%)`` 已经能唯一确定分数，故不再重复输出「分数(S)」。
+    """
     notes = result.notes
     return {
         "song_id": result.record.song_id,
@@ -158,15 +161,13 @@ def as_dict(result: CheckResult) -> dict:
         "level": None if result.chart is None else result.chart.level,
         "ds": result.ds,
         "achievements": result.record.achievements,
-        "score": result.score,
         "ra": result.record.ra,
         "rate": result.record.rate,
         "fc": result.record.fc,
         "fs": result.record.fs,
         "notes": None if notes is None else notes.to_api(),
         "note_count": None if notes is None else notes.note_count,
-        "status": result.status.value,
-        "status_label": result.status.label,
+        "status": result.status.label,
         "issues": list(result.issues),
         "note_delta": None if result.note_delta is None else list(result.note_delta),
         "nearest_delta": result.nearest_delta,
@@ -202,7 +203,7 @@ def render_summary(results: Sequence[CheckResult], *, elapsed: float | None = No
     counts = summarize(results)
     total = sum(counts.values())
     parts = [f"共校验 {total} 条成绩"]
-    for status in (Status.IMPOSSIBLE, Status.MARGINAL, Status.FIELD_ERROR, Status.SKIPPED, Status.OK):
+    for status in (Status.IMPOSSIBLE, Status.MARGINAL, Status.SKIPPED, Status.OK):
         parts.append(f"{status.label} {counts[status]}")
     line = " | ".join(parts)
     if elapsed is not None:
@@ -211,11 +212,11 @@ def render_summary(results: Sequence[CheckResult], *, elapsed: float | None = No
 
 
 def write_json(path: str | Path, results: Iterable[CheckResult], meta: dict | None = None) -> Path:
-    """写出 JSON 报告。"""
+    """写出 JSON 报告（``summary`` 的键与 ``results`` 的 ``status`` 都是中文标签）。"""
     results = list(results)
     payload = {
         "meta": meta or {},
-        "summary": {status.value: count for status, count in summarize(results).items()},
+        "summary": {status.label: count for status, count in summarize(results).items()},
         "results": [as_dict(result) for result in results],
     }
     target = Path(path)
@@ -281,9 +282,9 @@ def render_problem_list(
     meta: dict | None = None,
     title: str = PROBLEM_LIST_TITLE,
 ) -> str:
-    """渲染「可疑 + 边缘（+ 字段不符）」文本清单，用于存档与人工复查。
+    """渲染「可疑 + 边缘」文本清单，用于存档与人工复查。
 
-    分组顺序为 ``_PROBLEM_GROUPS``（可疑 → 边缘 → 字段不符）；可疑组按「与最近可行成绩的
+    分组顺序为 ``_PROBLEM_GROUPS``（可疑 → 边缘）；可疑组按「与最近可行成绩的
     差值」降序（越离谱越靠前），其余组按 ``(曲目 ID, 类型, 难度)`` 升序，保证同样输入
     得到可 diff 的稳定输出。``meta`` 与 JSON 报告使用同一份字典。
     """
@@ -307,12 +308,12 @@ def render_problem_list(
             f"物量容差 {meta.get('tolerance', 0)} / 分数容差 {score_tolerance:.4f}%"
         )
     parts = [f"共校验 {sum(counts.values())} 条成绩"]
-    for status in (Status.IMPOSSIBLE, Status.MARGINAL, Status.FIELD_ERROR, Status.SKIPPED, Status.OK):
+    for status in (Status.IMPOSSIBLE, Status.MARGINAL, Status.SKIPPED, Status.OK):
         parts.append(f"{status.label} {counts[status]}")
     lines.append("统计：" + " | ".join(parts))
     lines.append(
         "说明：可疑 = 该物量下无法达成；边缘 = 与最近可行成绩的差距落在容差内"
-        "（可能是数据/模型舍入）；字段不符 = 成绩自带 ra/rate/ds 与谱面不一致。"
+        "（可能是数据/模型舍入）；跳过 = 宴谱或缺谱面数据。"
     )
 
     for status in _PROBLEM_GROUPS:
@@ -357,7 +358,6 @@ def _csv_row(result: CheckResult) -> list[str]:
         "" if chart is None else chart.level,
         f"{result.ds:g}",
         f"{record.achievements:.4f}",
-        str(result.score),
         "" if record.ra is None else str(record.ra),
         "" if not rate else rate,
         combo_label(record.fc),
@@ -392,7 +392,7 @@ def write_csv(path: str | Path, results: Iterable[CheckResult]) -> Path:
     """把全部校验结果写成 CSV，返回实际写入的路径。
 
     编码为 ``utf-8-sig``（带 BOM），Excel 双击打开即可正确显示中文；列顺序见 ``CSV_HEADERS``，
-    其中数值列（``成绩(%)`` / ``分数(S)`` / ``总物量`` 等）都是裸数字，便于直接排序透视；
+    其中数值列（``成绩(%)`` / ``总物量`` 等）都是裸数字，便于直接排序透视；
     行顺序按 ``(曲目 ID, 类型, 难度)`` 升序，不按状态分组。
     """
     target = Path(path)

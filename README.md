@@ -17,17 +17,20 @@ BREAK 池  = 10000 × (Σ该 BREAK 的池份额) / (20 × brk)      T1 表：CP 
 理论最高分 = 100% 基础分 + 100% BREAK 池 = 101.0000%
 ```
 
-判定结果分五类：
+判定结果分四类（**内部标识一律英文**：`ok` / `marginal` / `impossible` / `skipped`，
+**最终输出统一为中文**：终端 / JSON / CSV / 文本清单里只出现下表的中文状态）：
 
-| 状态 | 含义 |
-| --- | --- |
-| `通过` | 分数可达，且 `ra` / `rate` / `ds` 字段自洽 |
-| `边缘` | 原地无解，但**物量 ±`--tolerance`（默认 1 个）或分数差 ≤ `--score-tolerance`（默认 1 = 0.0001%）**内可解——通常是水鱼物量数据或模型舍入造成的，不应直接当作可疑 |
-| `可疑` | 分数在物量容差与分数容差内都解不出来（`--strict` 下即「原地无解」），或超过 101.0000% |
-| `字段不符` | `ra` / `rate` / `ds` 与标准公式或谱面数据不符（可用 `--no-field-check` 关闭） |
-| `跳过` | 宴谱（id ≥ 100000，可用 `--include-utage` 打开）或缺少谱面数据 |
+| 状态 | 内部标识 | 含义 |
+| --- | --- | --- |
+| `通过` | `ok` | 分数可达 |
+| `边缘` | `marginal` | 原地无解，但**物量 ±`--tolerance`（默认 1 个）或分数差 ≤ `--score-tolerance`（默认 1 = 0.0001%）**内可解——通常是水鱼物量数据或模型舍入造成的，不应直接当作可疑 |
+| `可疑` | `impossible` | 分数在物量容差与分数容差内都解不出来（`--strict` 下即「原地无解」），或超过 101.0000% |
+| `跳过` | `skipped` | 宴谱（id ≥ 100000，可用 `--include-utage` 打开）或缺少谱面数据 |
 
-退出码：`0` 无异常；`1` 取数失败；`2` 存在「可疑」或「字段不符」。
+本程序**只判「分数解不解得出来」，不校验成绩自带的字段**：`ra` / `rate` / `ds` / `dxScore` / `fc`
+一律原样引用水鱼返回的数据，不做一致性检查。
+
+退出码：`0` 无异常；`1` 取数失败；`2` 存在「可疑」。
 
 ## 快速开始
 
@@ -35,54 +38,55 @@ BREAK 池  = 10000 × (Σ该 BREAK 的池份额) / (20 × brk)      T1 表：CP 
 # 依赖管理用 uv（Python >= 3.12）
 uv sync
 
-# 1) 离线回归：水鱼公开测试数据（无需任何凭据）
-uv run python check_scores.py --source test
+# 1) 本地成绩文件（无需任何凭据，也可用于离线回归）
+uv run python achievement_reviewer.py --source local --records-file records.json
 
 # 2) 公开 B50 查询（需要水鱼用户名或 QQ）
-uv run python check_scores.py --source b50 --username <水鱼用户名>
+uv run python achievement_reviewer.py --source b50 --username <水鱼用户名>
 
-# 3) 自己的全量成绩（OAuth，需要 client_id）
-uv run python check_scores.py --source oauth --client-id <ID>
+# 3) 自己的全量成绩（OAuth）
+uv run python achievement_reviewer.py --source oauth
 
 # 3a) 首次授权：设备码流程（打开打印出的链接点「授权」，凭据写入 config.local.json）
-uv run python check_scores.py --login-only
+uv run python achievement_reviewer.py --login-only
 
 # 3b) 出报告：JSON + 可疑/边缘文本清单 + CSV 表格（可直接用 Excel 打开）
-uv run python check_scores.py --source oauth --out --csv --list-file
+uv run python achievement_reviewer.py --source oauth --out --csv --list-file
 #    等价于 --out out/report.json --csv out/report.csv --list-file out/suspicious.txt
 #    只写文件名（如 --csv report.csv）时统一落在 out/，带目录的路径原样使用
 ```
 
-`client_id` / `client_secret` 也可以放在项目根目录的 `config.local.json`（已 gitignore）：
+OAuth 的 `client_id` **写死在** `maimai_check/sources.py` 的 `OFFICIAL_CLIENT_ID`，
+命令行不接受 `client_id` / `client_secret`，也不读任何环境变量。
+只有按「机密客户端」注册时才需要把 `client_secret` 放进项目根目录的 `config.local.json`
+（已 gitignore，可用 `--config` 指向别的文件）：
 
 ```json
-{ "client_id": "your-client-id", "client_secret": "your-client-secret" }
+{ "client_secret": "your-client-secret" }
 ```
 
-或使用环境变量 `DF_CLIENT_ID` / `DF_CLIENT_SECRET`。
-`client_secret` 只在「机密客户端」注册方式下需要；此时续期用 `on-behalf-of` 换票，否则用 `refresh_token`
+配置文件里若写了 `client_id` 会覆盖写死的默认值；`refresh_token` / `subject` 由登录流程自动写入。
+机密客户端续期用 `on-behalf-of` 换票，否则用 `refresh_token`
 （刷新会轮换令牌，工具会把新令牌立刻落盘到缓存目录）。
 
 ## 常用参数
 
 | 参数 | 说明 |
 | --- | --- |
-| `--source {oauth,b50,test,file}` | 成绩来源，默认 `oauth` |
-| `--records-file` / `--music-data-file` | 离线校验：本地成绩 / 谱面 JSON（`--source file`） |
+| `--source {oauth,b50,local}` | 成绩来源，默认 `oauth`（`local` 读 `--records-file`） |
+| `--records-file` / `--music-data-file` | 离线校验：本地成绩 / 谱面 JSON（`--source local` / 完全离线时使用） |
 | `--break-table {T1,break2600,break2550,break2500}` | BREAK 判定系数表，默认 `T1`（本次数据回归的最佳拟合） |
 | `--window {floor,round,union}` | 取整窗口，默认 `floor`（显示值 = 向下取整） |
 | `--tolerance N` | 物量容差（个），默认 1 |
 | `--score-tolerance N` | 分数容差（S 单位：1 = 0.0001%），默认 1，差值更大即记为「可疑」 |
 | `--strict` | 等价于 `--tolerance 0 --score-tolerance 0`（只认原地可解） |
-| `--no-field-check` | 关闭 `ra` / `rate` / `ds` 自洽检查 |
-| `--check-dx` / `--check-combo` | 额外检查 `dxScore ≤ 物量 × 3` / 100.5% 以上必须 AP（水鱼 `test_data` 中这两类字段可能被随机化，默认关闭） |
 | `--include-utage` | 同时校验宴谱 |
 | `--limit N` / `--quiet` / `--refresh` | 只校验前 N 条 / 只输出汇总 / 忽略缓存 |
 | `--cache-dir DIR`（默认 `cache`）、`--config FILE`（默认 `config.local.json`） | 缓存与凭据位置 |
 | `--out-dir DIR`（默认 `out`） | 输出目录：`--out` / `--csv` / `--list-file` 只写文件名时落在这里，带目录的路径原样使用 |
 | `--out [report.json]` | 写出完整 JSON 报告（`meta` / `summary` / `results`）；只给 `--out` 即 `out/report.json` |
 | `--csv [report.csv]` | 写出 CSV 表格（UTF-8 BOM + CRLF，Excel 双击即开）；只给 `--csv` 即 `out/report.csv` |
-| `--list-file [suspicious.txt]` | 把「可疑 + 边缘（+ 字段不符）」清单写成文本档案（曲名 / ID / 类型 / 难度 / 等级 / 定数 / 成绩 / 全连 / 连锁 / 物量 / 说明）；只给 `--list-file` 即 `out/suspicious.txt` |
+| `--list-file [suspicious.txt]` | 把「可疑 + 边缘」清单写成文本档案（曲名 / ID / 类型 / 难度 / 等级 / 定数 / 成绩 / 全连 / 连锁 / 物量 / 说明）；只给 `--list-file` 即 `out/suspicious.txt` |
 | `--login-only` | 只完成 OAuth 设备码授权并把凭据写入 `config.local.json`，不拉取成绩 |
 
 取整窗口的含义（`R` 为真实成绩、`S` 为显示值，单位都是 0.0001%）：
@@ -96,20 +100,20 @@ union：两者取并（最宽松）
 ## 输出
 
 1. **终端汇总**：一行统计 + 判定配置，`--quiet` 只保留汇总。
-2. **JSON 报告**（`--out`）：`meta`（来源、判定表、窗口、容差、生成时间）/ `summary` / `results`（每条含 `notes` / `ra` / `rate` / `fc` / `fs` / `nearest_delta` 等）。
-3. **文本清单**（`--list-file`）：把所有非「通过」的成绩（可疑 → 边缘 → 字段不符）写成 UTF-8 等宽文本档案，
+2. **JSON 报告**（`--out`）：`meta`（来源、判定表、窗口、容差、生成时间）/ `summary`（键为中文状态名）/ `results`（每条含 `status`（中文）/ `notes` / `ra` / `rate` / `fc` / `fs` / `nearest_delta` 等；`成绩(%)` 已能唯一确定分数，故不再重复输出「分数(S)」）。
+3. **文本清单**（`--list-file`）：把所有非「通过」的成绩（可疑 → 边缘）写成 UTF-8 等宽文本档案，
    便于存档、对比与人工复查。文件结构：
 
    ```
    maimai 成绩合法性校验 —— 可疑/边缘成绩清单
    ------------------------------------------------------------------------
-   生成时间：2026-09-16 16:52:07
-   数据来源：水鱼 /player/records (OAuth)（来源 oauth）
+   生成时间：2026-09-16 20:56:16
+   数据来源：本地文件 cache\records.json（来源 local）
    判定配置：T1 表 / floor 窗口 / 物量容差 1 / 分数容差 0.0001%
-   统计：共校验 3864 条成绩 | 可疑 845 | 边缘 326 | 字段不符 0 | 跳过 0 | 通过 2693
-   说明：可疑 = 该物量下无法达成；边缘 = ...；字段不符 = ...
+   统计：共校验 3906 条成绩 | 可疑 851 | 边缘 326 | 跳过 0 | 通过 2729
+   说明：可疑 = 该物量下无法达成；边缘 = ...；跳过 = ...
 
-   【可疑】845 条
+   【可疑】851 条
    曲名  ID  类型  难度  等级  定数  成绩  全连  连锁  物量  说明
    ...
    ```
@@ -121,9 +125,10 @@ union：两者取并（最宽松）
 4. **CSV 表格**（`--csv`）：每条成绩一行（含「通过」「跳过」），可直接用 Excel / WPS 打开或另存为 xlsx。
    * 编码 `UTF-8 with BOM` + `CRLF` 换行：双击即开，中文不乱码；
    * **不按状态分组**（可疑与边缘一视同仁），统一按 `(ID, 类型, 难度)` 升序，便于 `diff`；状态仍保留在 `状态` 列；
-   * 列：`状态` / `曲名` / `ID` / `类型` / `难度` / `等级` / `定数` / `成绩(%)` / `分数(S)` / `RA` / `评级` /
+   * 列：`状态` / `曲名` / `ID` / `类型` / `难度` / `等级` / `定数` / `成绩(%)` / `RA` / `评级` /
      `全连` / `连锁` / `物量`（`tap+hold+slide+touch+brk`）/ `总物量` / `最近可行差值(%)` / `说明`；
-   * `成绩(%)`、`分数(S)`、`总物量`、`最近可行差值(%)` 都是裸数字（如 `98.4464` / `+0.0058`），可直接排序与透视。
+   * `成绩(%)`、`总物量`、`最近可行差值(%)` 都是裸数字（如 `98.4464` / `+0.0058`），可直接排序与透视；
+     与 `成绩(%)` 重复的「分数(S)」列已去掉（`成绩(%) × 10000` 才是它）。
 
    所有输出路径都会在终端打印**绝对路径**；`--out` / `--csv` / `--list-file` 只写文件名时统一落在
    `--out-dir`（默认 `out/`），带目录的写法（`out/x.csv`、`D:\tmp\x.csv`）原样使用。
@@ -149,9 +154,9 @@ union：两者取并（最宽松）
 * 不会把正常成绩误判为「可疑」（无假阳性）；
 * 大 `brk` 谱面上的可疑成绩可能被漏报（明细中表现为「通过」）。
 
-实测：水鱼 `test_data` 的 1434 条成绩端到端约 **3.9 秒**（含取数与 JSON 输出），
-默认容差下为 2 可疑 / 1 边缘 / 1431 通过 / 0 字段不符（三条「差一点」记录：0.0004%、0.0058% 与物量 ±1）。
-真实账号（3864 条）约 **16 秒**，实测结果与验证方法见下文「真实数据实测」。
+实测：水鱼公开测试数据（`/player/test_data`）的 1434 条成绩端到端约 **3.9 秒**（含取数与 JSON 输出），
+默认容差下为 2 可疑 / 1 边缘 / 1431 通过（三条「差一点」记录：0.0004%、0.0058% 与物量 ±1）。
+真实账号（3906 条）约 **16 秒**（`--source local` 读缓存的成绩文件，含 JSON + CSV + 文本清单输出）。
 
 
 ## 已知限制
@@ -160,21 +165,21 @@ union：两者取并（最宽松）
   判为「可疑」意味着**按官方计分公式无论怎么打都得不到这个分数**。
 * 分数容差（默认 1 = 0.0001%）与物量容差（默认 1 个）用于容忍水鱼物量数据与实机版本的差异；
   需要「最后一位也不许差」的结论时用 `--strict`，需要更宽松时可自行调大这两个参数。
-* 默认容差很紧（物量 ±1 / 分数 ±0.0001%）：真实数据里约 8%（326/3864）的记录会落进「边缘」，属于实机取整的正常范围；
+* 默认容差很紧（物量 ±1 / 分数 ±0.0001%）：真实数据里约 8%（326/3906）的记录会落进「边缘」，属于实机取整的正常范围；
   差值越小越可能是数据舍入，差值越大越可能是伪造。需要「一位小数都不许差」时用 `--strict`。
 * Windows 控制台默认 GBK，曲名里的半角片假名（如 `ﾟ`）无法编码，输出时会以 `?` 代替而不是中断报告
   （`--list-file` / `--out` 落盘的文件始终是完整 UTF-8）。
-* `player/test_data` 是被随机化过的公开测试数据（`dx` / `fc` 等字段不可信），只用于离线回归。
+* 水鱼 `player/test_data` 是被随机化过的公开测试数据（`dx` / `fc` 等字段不可信）；
+  本程序不再提供该在线来源，需要离线回归时把数据存成本地 JSON 再用 `--source local` 读取。
 * 宴谱（`id ≥ 100000`）物量口径与通常谱面不同，默认跳过。
 
 ## 目录结构
 
 ```
-check_scores.py          CLI 入口（取数 → 逐条校验 → 汇总 / JSON）
+achievement_reviewer.py          CLI 入口（取数 → 逐条校验 → 汇总 / JSON）
 maimai_check/
   scoreline.py           分数可行域模型（纯逻辑，无网络）
-  checks.py              单条成绩校验：RA / 评级公式、状态判定
-  sources.py             水鱼 API 客户端：OAuth、缓存、music_data / records / test_data / b50
+  checks.py              单条成绩校验：可解性判定与状态定义（内部英文标识 + 中文输出标签）
+  sources.py             水鱼 API 客户端：OAuth（client_id 写死）、缓存、music_data / records / b50
   report.py              终端表格（CJK 宽度对齐）与 JSON 报告
-tests/                   pytest 单元测试
 ```
