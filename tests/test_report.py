@@ -1,7 +1,9 @@
-"""``maimai_check.report`` 的单元测试：宽度对齐、表格渲染与 JSON 输出。"""
+"""``maimai_check.report`` 的单元测试：宽度对齐、表格渲染与 JSON / CSV 输出。"""
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 
 import pytest
@@ -9,15 +11,20 @@ import pytest
 from maimai_check.checks import ChartInfo, CheckResult, Record, Status, check_record
 from maimai_check.report import (
     CHAIN_LABELS,
+    CSV_HEADERS,
     as_dict,
     combo_label,
+    csv_rows,
     difficulty_name,
     display_width,
     format_notes,
+    render_csv,
     render_problem_list,
     render_results,
     render_summary,
     render_table,
+    sort_group,
+    write_csv,
     write_json,
     write_problem_list,
 )
@@ -69,7 +76,7 @@ def test_render_table_pads_to_equal_display_width():
 def test_format_notes_and_difficulty_name():
     assert format_notes(None) == "-"
     assert format_notes(Notes(1, 2, 3, 4, 5)) == "1+2+3+4+5"
-    assert [difficulty_name(index) for index in (0, 3, 4)] == ["BSC", "MAS", "ReM"]
+    assert [difficulty_name(index) for index in (0, 3, 4)] == ["basic", "master", "Re:MASTER"]
     assert difficulty_name(9) == "L9"
 
 
@@ -102,7 +109,7 @@ def test_as_dict_is_serializable():
     assert payload["status"] == "ok" and payload["status_label"] == "通过"
     assert payload["notes"] == [10, 0, 0, 0, 0]
     assert payload["note_count"] == 10
-    assert payload["difficulty"] == "MAS"
+    assert payload["difficulty"] == "master"
     assert json.loads(json.dumps(payload, ensure_ascii=False)) == payload
 
 
@@ -184,3 +191,50 @@ def test_write_json_creates_parent_and_round_trips(tmp_path):
     assert payload["summary"][Status.OK.value] == 1
     assert payload["summary"][Status.MARGINAL.value] == 1
     assert len(payload["results"]) == 2
+
+
+def test_sort_group_puts_worst_impossible_first():
+    results = [make_impossible_result(10, song_id="100"), make_impossible_result(9000, song_id="200")]
+    assert [result.record.song_id for result in sort_group(results, Status.IMPOSSIBLE)] == ["200", "100"]
+    assert sort_group(results, Status.MARGINAL) == []
+
+
+def test_csv_rows_are_sorted_uniformly_without_status_groups():
+    chart = make_chart()
+    ok = check_record(make_record(chart, 100.0), chart)
+    skipped = check_record(Record("9999", "SD", 3, 100.0), None)
+    rows = csv_rows([make_marginal_result(), ok, skipped, make_impossible_result(4321)])
+    # 统一按 (ID, 类型, 难度) 升序：可疑 / 边缘 / 通过 / 跳过 混在一起，不分组
+    assert [row[2] for row in rows] == ["1234", "84", "84", "9999"]
+    assert [row[0] for row in rows] == ["可疑", "边缘", "通过", "跳过"]
+    assert [len(row) for row in rows] == [len(CSV_HEADERS)] * 4
+
+
+def test_render_csv_escapes_commas_and_quotes():
+    chart = ChartInfo("1", 'Ku,Ku"a"', "SD", 3, "5", 5.0, Notes(10, 0, 0))
+    text = render_csv([check_record(Record("1", "SD", 3, 100.0), chart)])
+    assert text.endswith("\r\n")
+    assert '"Ku,Ku""a"""' in text
+    rows = list(csv.reader(io.StringIO(text)))
+    assert rows[0] == list(CSV_HEADERS)
+    assert rows[1][1] == 'Ku,Ku"a"'
+
+
+def test_write_csv_is_excel_friendly(tmp_path):
+    chart = make_chart()
+    ok = check_record(make_record(chart, 100.0), chart)
+    target = tmp_path / "nested" / "report.csv"
+    assert write_csv(target, [ok, make_impossible_result(4321), make_marginal_result()]) == target
+
+    raw = target.read_bytes()
+    assert raw.startswith(b"\xef\xbb\xbf")  # BOM：Excel 双击打开不会乱码
+    assert b"\r\n" in raw  # CRLF：Excel / Windows 换行
+
+    rows = list(csv.reader(io.StringIO(raw.decode("utf-8-sig"))))
+    assert rows[0] == list(CSV_HEADERS)
+    assert len(rows) == 4
+    assert [row[2] for row in rows[1:]] == ["1234", "84", "84"]  # 统一按 ID 升序，不按状态分组
+
+    impossible = rows[1]
+    assert impossible[1] == "Fake 1234" and impossible[7] == "101.0001" and impossible[16] == "无解"
+    assert {row[7] for row in rows[2:]} == {"98.4464", "100.0000"}

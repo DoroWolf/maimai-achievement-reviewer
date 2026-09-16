@@ -8,6 +8,9 @@
     uv run python check_scores.py --source b50 --username <水鱼用户名>
     uv run python check_scores.py --source file --records-file records.json
 
+    # 出报告：JSON / CSV / 可疑清单（只写文件名时统一落在 --out-dir，默认 out/）
+    uv run python check_scores.py --out --csv --list-file
+
 判定说明见 ``maimai_check/scoreline.py`` 的模块文档；可疑条目退出码为 2。
 """
 
@@ -29,10 +32,16 @@ from maimai_check.checks import (
     check_record,
     summarize,
 )
-from maimai_check.report import render_results, render_summary, write_json, write_problem_list
+from maimai_check.report import render_results, render_summary, write_csv, write_json, write_problem_list
 from maimai_check.scoreline import BREAK_TABLES, WINDOWS, Notes
 
 DEFAULT_CONFIG = "config.local.json"
+
+#: 输出文件的默认落点：只给文件名时写在 ``--out-dir``（默认 ``out``）里。
+DEFAULT_OUT_DIR = "out"
+DEFAULT_OUT_NAME = "report.json"
+DEFAULT_CSV_NAME = "report.csv"
+DEFAULT_LIST_NAME = "suspicious.txt"
 
 
 def use_robust_std_streams() -> None:
@@ -102,13 +111,55 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--include-utage", action="store_true", help="同时校验宴谱（默认跳过）")
     parser.add_argument("--limit", type=int, default=0, help="只校验前 N 条（调试用）")
     parser.add_argument("--refresh", action="store_true", help="忽略本地缓存，重新请求")
-    parser.add_argument("--out", help="把完整结果写入 JSON 文件")
+    parser.add_argument(
+        "--out-dir",
+        default=DEFAULT_OUT_DIR,
+        help=f"输出目录（默认 {DEFAULT_OUT_DIR}）：--out/--csv/--list-file 只写文件名时落在这里",
+    )
+    parser.add_argument(
+        "--out",
+        nargs="?",
+        const=DEFAULT_OUT_NAME,
+        help=f"把完整结果写入 JSON 文件（缺省文件名 {DEFAULT_OUT_NAME}）",
+    )
+    parser.add_argument(
+        "--csv",
+        nargs="?",
+        const=DEFAULT_CSV_NAME,
+        help=f"把全部结果写入 CSV 表格（缺省文件名 {DEFAULT_CSV_NAME}，UTF-8 BOM + CRLF，可直接用 Excel 打开）",
+    )
     parser.add_argument(
         "--list-file",
-        help="把「可疑 + 边缘」成绩清单写入文本文件（含曲名/ID/类型/难度/等级/定数/成绩/全连/连锁/物量/说明）",
+        nargs="?",
+        const=DEFAULT_LIST_NAME,
+        help=(
+            "把「可疑 + 边缘」成绩清单写入文本文件"
+            f"（缺省文件名 {DEFAULT_LIST_NAME}，含曲名/ID/类型/难度/等级/定数/成绩/全连/连锁/物量/说明）"
+        ),
     )
     parser.add_argument("--quiet", action="store_true", help="只输出汇总，不打印明细表")
     return parser
+
+
+def resolve_output(path: str, out_dir: str) -> Path:
+    """解析输出路径。
+
+    只给文件名（如 ``suspicous.txt``）时放进 ``--out-dir``（默认 ``out``），
+    带目录的写法（``out/report.csv``、``D:\\tmp\\x.csv``）与绝对路径原样使用，
+    这样「只写文件名」的结果不会再散落到项目根目录。
+    """
+    target = Path(path)
+    if str(target.parent) in ("", "."):
+        return Path(out_dir) / target.name
+    return target
+
+
+def describe_output(path: Path) -> str:
+    """输出用于提示的绝对路径（避免相对路径看不出去哪了）。"""
+    try:
+        return str(path.resolve())
+    except OSError:  # pragma: no cover - 路径无法解析时退回原值
+        return str(path)
 
 
 def make_client(args: argparse.Namespace, log=print) -> df.DivingFishClient:
@@ -257,12 +308,15 @@ def main(argv: list[str] | None = None) -> int:
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
     if args.out:
-        path = write_json(args.out, results, meta)
-        print(f"\n完整结果已写入 {path}")
+        path = write_json(resolve_output(args.out, args.out_dir), results, meta)
+        print(f"\n完整结果已写入 {describe_output(path)}")
+    if args.csv:
+        path = write_csv(resolve_output(args.csv, args.out_dir), results)
+        print(f"CSV 表格（{len(results)} 行，可直接用 Excel 打开）已写入 {describe_output(path)}")
     if args.list_file:
-        path = write_problem_list(args.list_file, results, meta=meta)
+        path = write_problem_list(resolve_output(args.list_file, args.out_dir), results, meta=meta)
         problems = counts[Status.IMPOSSIBLE] + counts[Status.MARGINAL] + counts[Status.FIELD_ERROR]
-        print(f"可疑/边缘清单（{problems} 条）已写入 {path}")
+        print(f"可疑/边缘清单（{problems} 条）已写入 {describe_output(path)}")
 
     if counts[Status.IMPOSSIBLE] or counts[Status.FIELD_ERROR]:
         return 2

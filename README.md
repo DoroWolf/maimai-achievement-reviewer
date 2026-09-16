@@ -45,8 +45,10 @@ uv run python check_scores.py --source oauth --client-id <ID>
 # 3a) 首次授权：设备码流程（打开打印出的链接点「授权」，凭据写入 config.local.json）
 uv run python check_scores.py --login-only
 
-# 3b) 出报告：JSON + 可疑/边缘文本清单
-uv run python check_scores.py --source oauth --out out/report.json --list-file out/suspicious.txt
+# 3b) 出报告：JSON + 可疑/边缘文本清单 + CSV 表格（可直接用 Excel 打开）
+uv run python check_scores.py --source oauth --out --csv --list-file
+#    等价于 --out out/report.json --csv out/report.csv --list-file out/suspicious.txt
+#    只写文件名（如 --csv report.csv）时统一落在 out/，带目录的路径原样使用
 ```
 
 `client_id` / `client_secret` 也可以放在项目根目录的 `config.local.json`（已 gitignore）：
@@ -75,8 +77,10 @@ uv run python check_scores.py --source oauth --out out/report.json --list-file o
 | `--include-utage` | 同时校验宴谱 |
 | `--limit N` / `--quiet` / `--refresh` | 只校验前 N 条 / 只输出汇总 / 忽略缓存 |
 | `--cache-dir DIR`（默认 `cache`）、`--config FILE`（默认 `config.local.json`） | 缓存与凭据位置 |
-| `--out report.json` | 写出完整 JSON 报告（`meta` / `summary` / `results`） |
-| `--list-file out/suspicious.txt` | 把「可疑 + 边缘（+ 字段不符）」清单写成文本档案（曲名 / ID / 类型 / 难度 / 等级 / 定数 / 成绩 / 全连 / 连锁 / 物量 / 说明） |
+| `--out-dir DIR`（默认 `out`） | 输出目录：`--out` / `--csv` / `--list-file` 只写文件名时落在这里，带目录的路径原样使用 |
+| `--out [report.json]` | 写出完整 JSON 报告（`meta` / `summary` / `results`）；只给 `--out` 即 `out/report.json` |
+| `--csv [report.csv]` | 写出 CSV 表格（UTF-8 BOM + CRLF，Excel 双击即开）；只给 `--csv` 即 `out/report.csv` |
+| `--list-file [suspicious.txt]` | 把「可疑 + 边缘（+ 字段不符）」清单写成文本档案（曲名 / ID / 类型 / 难度 / 等级 / 定数 / 成绩 / 全连 / 连锁 / 物量 / 说明）；只给 `--list-file` 即 `out/suspicious.txt` |
 | `--login-only` | 只完成 OAuth 设备码授权并把凭据写入 `config.local.json`，不拉取成绩 |
 
 取整窗口的含义（`R` 为真实成绩、`S` 为显示值，单位都是 0.0001%）：
@@ -112,6 +116,15 @@ union：两者取并（最宽松）
    `定数` / `成绩`（4 位小数百分数）/ `全连`（`fc` 字段：`FC` `FC+` `AP` `AP+`，缺失记 `-`）/
    `连锁`（`fs` 字段：`FS` `FS+` `FSD` `FSD+` `SYNC`）/ `物量`（`tap+hold+slide+touch+brk`）/ `说明`（判定原因）。
    排序：可疑组按「与最近可行成绩的差值」降序（越离谱越靠前），其余组按 `(ID, 类型, 难度)` 升序，便于 `diff`。
+4. **CSV 表格**（`--csv`）：每条成绩一行（含「通过」「跳过」），可直接用 Excel / WPS 打开或另存为 xlsx。
+   * 编码 `UTF-8 with BOM` + `CRLF` 换行：双击即开，中文不乱码；
+   * **不按状态分组**（可疑与边缘一视同仁），统一按 `(ID, 类型, 难度)` 升序，便于 `diff`；状态仍保留在 `状态` 列；
+   * 列：`状态` / `曲名` / `ID` / `类型` / `难度` / `等级` / `定数` / `成绩(%)` / `分数(S)` / `RA` / `评级` /
+     `全连` / `连锁` / `物量`（`tap+hold+slide+touch+brk`）/ `总物量` / `最近可行差值(%)` / `说明`；
+   * `成绩(%)`、`分数(S)`、`总物量`、`最近可行差值(%)` 都是裸数字（如 `98.4464` / `+0.0058`），可直接排序与透视。
+
+   所有输出路径都会在终端打印**绝对路径**；`--out` / `--csv` / `--list-file` 只写文件名时统一落在
+   `--out-dir`（默认 `out/`），带目录的写法（`out/x.csv`、`D:\tmp\x.csv`）原样使用。
 
 ## 算法与性能
 

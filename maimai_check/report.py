@@ -1,32 +1,39 @@
-﻿"""结果输出：终端表格（按中日韩字符宽度对齐）、JSON 报告与可疑成绩文本清单。"""
+﻿"""结果输出：终端表格（按中日韩字符宽度对齐）、JSON 报告、可疑成绩文本清单与 CSV 表格。"""
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import unicodedata
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
-from .checks import CheckResult, Status, summarize
+from .checks import RATE_MAPPING, CheckResult, Status, summarize
 from .scoreline import Notes
 
 __all__ = [
     "CHAIN_LABELS",
     "COMBO_LABELS",
+    "CSV_HEADERS",
     "DIFFICULTY_NAMES",
     "PROBLEM_LIST_TITLE",
     "as_dict",
     "combo_label",
+    "csv_rows",
     "display_width",
+    "render_csv",
     "render_problem_list",
     "render_results",
     "render_summary",
     "render_table",
+    "sort_group",
+    "write_csv",
     "write_json",
     "write_problem_list",
 ]
 
-DIFFICULTY_NAMES = ("BSC", "ADV", "EXP", "MAS", "ReM")
+DIFFICULTY_NAMES = ("basic", "advanced", "expert", "master", "Re:MASTER")
 
 #: 全连标记（水鱼 ``fc`` 字段）的可读名。
 COMBO_LABELS: dict[str, str] = {
@@ -52,6 +59,30 @@ _PROBLEM_ALIGNS = ("left", "left", "left", "left", "left", "right", "right", "le
 
 #: 清单中出现的状态分组（按此顺序输出）。
 _PROBLEM_GROUPS = (Status.IMPOSSIBLE, Status.MARGINAL, Status.FIELD_ERROR)
+
+#: CSV 表头（在文本清单的列之后补上机器可读的 ``分数`` / ``RA`` / ``评级`` 等信息）。
+CSV_HEADERS = (
+    "状态",
+    "曲名",
+    "ID",
+    "类型",
+    "难度",
+    "等级",
+    "定数",
+    "成绩(%)",
+    "分数(S)",
+    "RA",
+    "评级",
+    "全连",
+    "连锁",
+    "物量",
+    "总物量",
+    "最近可行差值(%)",
+    "说明",
+)
+
+#: CSV 行分隔符：Windows / Excel 习惯的 CRLF。
+_CSV_LINETERMINATOR = "\r\n"
 
 
 def display_width(text: str) -> int:
@@ -230,6 +261,20 @@ def _sort_key(result: CheckResult) -> tuple:
     return (record.song_id, record.type, record.level_index)
 
 
+def sort_group(results: Iterable[CheckResult], status: Status) -> list[CheckResult]:
+    """取某一状态的结果并排序（文本清单与 CSV 共用同一顺序）。
+
+    可疑组按「与最近可行成绩的差值」降序（越离谱越靠前），其余组按 ``(曲目 ID, 类型, 难度)``
+    升序，保证同样输入得到可 diff 的稳定输出。
+    """
+    if status is Status.IMPOSSIBLE:
+        return sorted(
+            (result for result in results if result.status is status),
+            key=lambda result: (-abs(result.nearest_delta or 0), _sort_key(result)),
+        )
+    return sorted((result for result in results if result.status is status), key=_sort_key)
+
+
 def render_problem_list(
     results: Iterable[CheckResult],
     *,
@@ -271,13 +316,7 @@ def render_problem_list(
     )
 
     for status in _PROBLEM_GROUPS:
-        if status is Status.IMPOSSIBLE:
-            group = sorted(
-                (r for r in results if r.status is status),
-                key=lambda r: (-abs(r.nearest_delta or 0), _sort_key(r)),
-            )
-        else:
-            group = sorted((r for r in results if r.status is status), key=_sort_key)
+        group = sort_group(results, status)
         lines.append("")
         lines.append(f"【{status.label}】{len(group)} 条")
         if not group:
@@ -299,4 +338,64 @@ def write_problem_list(
     target.parent.mkdir(parents=True, exist_ok=True)
     text = render_problem_list(results, meta=meta, title=title)
     target.write_text(text.rstrip("\n") + "\n", encoding="utf-8")
+    return target
+
+
+def _csv_row(result: CheckResult) -> list[str]:
+    record = result.record
+    chart = result.chart
+    notes = result.notes
+    rate = record.rate
+    if rate:
+        rate = RATE_MAPPING.get(str(rate).lower(), str(rate))
+    return [
+        result.status.label,
+        result.title,
+        record.song_id,
+        record.type,
+        difficulty_name(record.level_index),
+        "" if chart is None else chart.level,
+        f"{result.ds:g}",
+        f"{record.achievements:.4f}",
+        str(result.score),
+        "" if record.ra is None else str(record.ra),
+        "" if not rate else rate,
+        combo_label(record.fc),
+        combo_label(record.fs, CHAIN_LABELS),
+        format_notes(notes),
+        "" if notes is None else str(notes.note_count),
+        "" if result.nearest_delta is None else f"{result.nearest_delta / 10000:+.4f}",
+        _detail(result),
+    ]
+
+
+def csv_rows(results: Iterable[CheckResult]) -> list[list[str]]:
+    """把全部结果整理成 CSV 数据行。
+
+    含「通过」「跳过」在内的每一条成绩，**不按状态分组**（可疑与边缘一视同仁），
+    统一按 ``(曲目 ID, 类型, 难度)`` 升序排列，保证输出稳定可 diff；状态仍保留在
+    ``状态`` 列里，方便在 Excel 中自行筛选。
+    """
+    return [_csv_row(result) for result in sorted(results, key=_sort_key)]
+
+
+def render_csv(results: Iterable[CheckResult]) -> str:
+    """渲染 CSV 文本（含表头；行分隔符为 CRLF，字段按 RFC 4180 加引号）。"""
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator=_CSV_LINETERMINATOR)
+    writer.writerow(CSV_HEADERS)
+    writer.writerows(csv_rows(results))
+    return buffer.getvalue()
+
+
+def write_csv(path: str | Path, results: Iterable[CheckResult]) -> Path:
+    """把全部校验结果写成 CSV，返回实际写入的路径。
+
+    编码为 ``utf-8-sig``（带 BOM），Excel 双击打开即可正确显示中文；列顺序见 ``CSV_HEADERS``，
+    其中数值列（``成绩(%)`` / ``分数(S)`` / ``总物量`` 等）都是裸数字，便于直接排序透视；
+    行顺序按 ``(曲目 ID, 类型, 难度)`` 升序，不按状态分组。
+    """
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(render_csv(results), encoding="utf-8-sig", newline="")
     return target
